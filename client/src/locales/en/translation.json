@@ -1,0 +1,115 @@
+{
+  "nav": {
+    "results": "Results",
+    "standings": "Standings",
+    "teams": "Teams",
+    "calendar": "Calendar",
+    "football": "Football",
+    "signIn": "Sign In",
+    "signOut": "Sign Out",
+    "preferences": "Preferences"
+  },
+  "footer": {
+    "copyright": "© 2026 CopaLive. All rights reserved."
+  },
+  "seo": {
+    "match_center": "Match Center",
+    "description": "Live score, statistics, and updates for"
+  },
+  "match": {
+    "stages": {
+      "regular_season": "Regular Season",
+      "group_stage": "Group Stage",
+      "league_stage": "League Stage",
+      "round_of_16": "Round of 16",
+      "quarter_finals": "Quarter Finals",
+      "semi_finals": "Semi Finals",
+      "final": "Final",
+      "third_place": "Third Place",
+      "preliminary_round": "Preliminary Round",
+      "qualification_round_1": "Qualification Round 1",
+      "qualification_round_2": "Qualification Round 2",
+      "qualification_round_3": "Qualification Round 3",
+      "playoff_round": "Playoff Round"
+    },
+    "status": {
+      "live": "LIVE",
+      "finished": "Finished",
+      "scheduled": "Scheduled",
+      "paused": "Paused"
+    },
+    "details": {
+      "back_to_matches": "Back to Matches",
+      "failed_to_load": "Failed to load match details",
+      "not_found": "Match not found",
+      "go_home": "Go Home",
+      "stats": "Match Stats",
+      "timeline": "Timeline",
+      "no_stats": "No statistics available yet",
+      "no_events": "No events recorded yet"
+    },
+    "events": {
+      "goal": "GOAL",
+      "yellow_card": "Yellow Card",
+      "red_card": "Red Card",
+      "substitution": "Substitution"
+    }
+  },
+  "time": {
+    "starting_soon": "Starting soon...",
+    "remaining_hours_minutes": "Starts in {{hours}}h {{minutes}}m",
+    "remaining_minutes": "Starts in {{minutes}}m"
+  },
+  "preferences": {
+    "welcome": "Welcome, {{name}}!",
+    "subtitle": "Let's personalize your experience. Choose your favorite teams and settings.",
+    "premier_league": "Premier League",
+    "champions_league": "Champions League (Top Teams)",
+    "additional": "Additional Preferences",
+    "notifications_title": "Match Notifications",
+    "notifications_desc": "Get alerts for goals and results.",
+    "language_title": "Language",
+    "language_desc": "App display language.",
+    "error_save": "Failed to save preferences. Please try again.",
+    "teams_selected": "{{count}} teams selected",
+    "saving": "Saving...",
+    "save_continue": "Save & Continue"
+  },
+  "auth": {
+    "signin_title": "Sign in to your account",
+    "or": "Or",
+    "create_account_link": "create a new account",
+    "email": "Email address",
+    "password": "Password",
+    "signing_in": "Signing in...",
+    "signin_button": "Sign in",
+    "register_title": "Create your account",
+    "signin_link": "sign in to existing account",
+    "username_optional": "Username (optional)",
+    "creating_account": "Creating account...",
+    "register_button": "Create Account"
+  },
+  "common": {
+    "loading": "Loading...",
+    "empty": "Empty"
+  },
+  "dashboard": {
+    "title": "CopaLive",
+    "description": "Live football scores, statistics and news.",
+    "all": "All",
+    "my_teams": "My Teams",
+    "select_league": "Select a League",
+    "updated_realtime": "Updated in real-time",
+    "updated_ago": "Updated {{minutes}} min ago",
+    "no_matches": "No matches scheduled for this date."
+  },
+  "world_cup": {
+    "title": "World Cup 2026",
+    "date": "June 11, 2026",
+    "days": "Days",
+    "hours": "Hrs",
+    "minutes": "Min",
+    "seconds": "Sec",
+    "countdown_text": "The countdown has begun!"
+  }
+}

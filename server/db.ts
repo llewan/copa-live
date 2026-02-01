@@ -9,7 +9,7 @@ const { Pool } = pg;
 // or fallback to individual vars if needed (but usually POSTGRES_URL is enough)
 export const pool = new Pool({
   connectionString: process.env.POSTGRES_URL || process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
+  ssl: (process.env.NODE_ENV === 'production' || process.env.POSTGRES_URL) ? { rejectUnauthorized: false } : undefined,
 });
 
 // Test connection

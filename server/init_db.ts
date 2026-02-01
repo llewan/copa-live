@@ -115,18 +115,16 @@ const createTables = async () => {
     console.log('Tables created successfully');
   } catch (e) {
     console.error('Error creating tables', e);
-  } finally {
-      // Don't close pool here if this script is imported, but if run standalone, maybe.
-      // Usually init_db is run as a script.
-      if (require.main === module) {
-          await pool.end();
-      }
+    throw e;
   }
 };
 
 // If run directly
-if (process.argv[1] === import.meta.url || process.argv[1].endsWith('init_db.ts')) {
-    createTables();
+import { fileURLToPath } from 'url';
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+    createTables()
+      .then(() => pool.end())
+      .catch(() => pool.end());
 }
 
 export default createTables;

@@ -11,6 +11,7 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import authRoutes from './routes/auth.js'
 import matchRoutes from './routes/matches.js'
+import createTables from './init_db.js'
 
 // load env
 dotenv.config()
@@ -38,6 +39,30 @@ app.use(
       message: 'ok',
     })
   },
+)
+
+/**
+ * DB Init (Protected)
+ */
+app.post(
+  '/api/init-db',
+  async (req: Request, res: Response): Promise<void> => {
+    const secret = req.query.secret as string || req.body.secret;
+    const adminSecret = process.env.ADMIN_SECRET || 'admin123';
+    
+    if (secret !== adminSecret) {
+      res.status(401).json({ success: false, error: 'Unauthorized' });
+      return;
+    }
+    
+    try {
+      await createTables();
+      res.json({ success: true, message: 'Database initialized successfully' });
+    } catch (error) {
+      console.error('Init DB Error:', error);
+      res.status(500).json({ success: false, error: 'Failed to initialize database' });
+    }
+  }
 )
 
 /**

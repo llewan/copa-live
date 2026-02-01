@@ -36,6 +36,7 @@
   },
   "include": [
     "client/src",
-    "api"
+    "api",
+    "server"
   ]
 }

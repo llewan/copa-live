@@ -20,7 +20,8 @@ export class LeagueService {
     }
 
     try {
-      const result = await pool.query('SELECT * FROM allowed_leagues WHERE is_active = 1');
+      // Postgres boolean fields should be queried with boolean literals (true/false)
+      const result = await pool.query('SELECT * FROM allowed_leagues WHERE is_active = true');
       this.cache = result.rows;
       this.lastFetch = now;
       return this.cache;

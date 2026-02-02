@@ -10,11 +10,11 @@ const { Pool } = pg;
 const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL;
 
 if (!connectionString) {
-  throw new Error('Database connection string not found. Please set POSTGRES_URL or DATABASE_URL environment variable.');
+  console.error('CRITICAL: Database connection string not found. Please set POSTGRES_URL or DATABASE_URL environment variable.');
 }
 
 export const pool = new Pool({
-  connectionString,
+  connectionString: connectionString || undefined,
   ssl: (process.env.NODE_ENV === 'production' || process.env.POSTGRES_URL) ? { rejectUnauthorized: false } : undefined,
 });
 

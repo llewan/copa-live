@@ -1,4 +1,14 @@
 {
+  "crons": [
+    {
+      "path": "/api/cron/daily",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/live",
+      "schedule": "*/10 * * * *"
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/(.*)",

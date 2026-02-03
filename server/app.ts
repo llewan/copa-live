@@ -11,6 +11,7 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import authRoutes from './routes/auth.js'
 import matchRoutes from './routes/matches.js'
+import { cronRoutes } from './routes/cron.js'
 import createTables from './init_db.js'
 
 // load env
@@ -27,6 +28,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }))
  */
 app.use('/api/auth', authRoutes)
 app.use('/api/matches', matchRoutes)
+app.use('/api/cron', cronRoutes)
 
 /**
  * health

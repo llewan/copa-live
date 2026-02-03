@@ -29,7 +29,9 @@ const createTables = async () => {
         competition_emblem VARCHAR(255),
         stage VARCHAR(50),
         group_name VARCHAR(50),
-        provider VARCHAR(50) DEFAULT 'football-data'
+        provider VARCHAR(50) DEFAULT 'football-data',
+        venue VARCHAR(255),
+        statistics JSONB DEFAULT '[]'
       );
     `);
     

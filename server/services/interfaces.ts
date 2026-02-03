@@ -34,6 +34,12 @@ export interface MatchEvent {
   player: { name: string };
 }
 
+export interface MatchStatistic {
+  type: string;
+  home: string | number;
+  away: string | number;
+}
+
 export interface Match {
   id: number;
   utcDate: string;
@@ -48,20 +54,13 @@ export interface Match {
   provider?: 'football-data' | 'api-football';
   lastUpdated?: string;
   events?: MatchEvent[];
+  venue?: string;
+  statistics?: MatchStatistic[];
 }
 
 export interface MatchDetail extends Match {
-  events: Array<{
-    type: string;
-    minute: number;
-    team: { name: string };
-    player: { name: string };
-  }>;
-  statistics: Array<{
-    type: string;
-    home: string | number;
-    away: string | number;
-  }>;
+  events: MatchEvent[];
+  statistics: MatchStatistic[];
 }
 
 export interface IFootballProvider {

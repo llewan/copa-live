@@ -65,6 +65,18 @@ export const mapFixtureToMatch = (fixture: ApiFootballFixture): Match => {
     player: { name: e.player.name }
   })) || [];
 
+  const homeStats = fixture.statistics?.find(s => s.team.id === fixture.teams.home.id)?.statistics || [];
+  const awayStats = fixture.statistics?.find(s => s.team.id === fixture.teams.away.id)?.statistics || [];
+
+  const statistics = homeStats.map(h => {
+      const a = awayStats.find(as => as.type === h.type);
+      return {
+          type: h.type,
+          home: h.value || 0,
+          away: a?.value || 0
+      };
+  });
+
   return {
     id: fixture.fixture.id,
     utcDate: fixture.fixture.date,
@@ -94,26 +106,18 @@ export const mapFixtureToMatch = (fixture: ApiFootballFixture): Match => {
     stage: fixture.league.round,
     group: null, // API-Football league object usually doesn't have group explicitly in this view, maybe in round string
     events,
-    provider: 'api-football'
+    provider: 'api-football',
+    venue: fixture.fixture.venue.name || undefined,
+    statistics: statistics.length > 0 ? statistics : undefined
   };
 };
 
 export const mapFixtureToMatchDetail = (fixture: ApiFootballFixture): MatchDetail => {
   const match = mapFixtureToMatch(fixture);
   
-  // match already has events mapped correctly, but we ensure it's not undefined for MatchDetail
-  const statistics = fixture.statistics?.flatMap(() => {
-      // API returns stats per team
-      // We need to normalize or just return raw.
-      // The interface expects { type, home, away }
-      // This is hard because we have two arrays (one for home, one for away)
-      // We'll skip complex merging for now and return empty or partial.
-      return []; 
-  }) || [];
-
   return {
     ...match,
     events: match.events || [],
-    statistics
+    statistics: match.statistics || []
   };
 };

@@ -182,13 +182,15 @@ export class FootballService {
                       const details = await this.apiFootball.getMatchDetails(matchInAll.id);
                       
                       await matchRepository.updateMatchStatus(
-                          base.id,
-                          details.status,
-                          details.minute, // Should be 90 or 120
-                          details.score.fullTime.home,
-                          details.score.fullTime.away,
-                          details.events // Save final events!
-                      );
+                      base.id,
+                      details.status,
+                      details.minute, // Should be 90 or 120
+                      details.score.fullTime.home,
+                      details.score.fullTime.away,
+                      details.events, // Save final events!
+                      details.venue,
+                      details.statistics
+                  );
                   } catch (err) {
                       console.error(`[FootballService] Failed to fetch details for finished match ${matchInAll.id}:`, err);
                   }
@@ -244,7 +246,9 @@ export class FootballService {
                   update.minute, 
                   update.score.fullTime.home, 
                   update.score.fullTime.away,
-                  update.events // Update events too
+                  update.events, // Update events too
+                  update.venue,
+                  update.statistics
               );
           } else {
              // Debug log to help diagnose missing links
@@ -372,16 +376,54 @@ export class FootballService {
       auditService.log('getMatchDetails', `Fetching details for match ${id}`);
       await this.configureAdapters();
 
-      // Try to determine provider. 
+      // 1. Try DB First to save API quota
+      try {
+          const dbMatch = await matchRepository.getMatchById(id);
+          if (dbMatch) {
+              // If match has events/stats, or is SCHEDULED (no stats needed yet), return it
+              // We assume if events/stats are empty in DB, it might mean we haven't synced them yet.
+              // But for SCHEDULED matches, they are naturally empty.
+              const isScheduled = dbMatch.status === 'SCHEDULED' || dbMatch.status === 'TIMED' || dbMatch.status === 'POSTPONED';
+              const hasData = (dbMatch.events && dbMatch.events.length > 0) || (dbMatch.statistics && dbMatch.statistics.length > 0);
+              
+              if (isScheduled || hasData) {
+                  return {
+                      ...dbMatch,
+                      events: dbMatch.events || [],
+                      statistics: dbMatch.statistics || []
+                  } as MatchDetail;
+              }
+              // If LIVE/FINISHED and no data, we proceed to fetch from API.
+          }
+      } catch (e) {
+          console.warn('[FootballService] DB lookup failed for details:', e);
+      }
+
+      // 2. Try to determine provider. 
       // If we don't know, we try ApiFootball first (better details), then FootballData.
       try {
-          return await this.apiFootball.getMatchDetails(id);
+          const details = await this.apiFootball.getMatchDetails(id);
+          
+          // Save to DB so next time we hit cache
+          await matchRepository.updateMatchStatus(
+            details.id,
+            details.status,
+            details.minute,
+            details.score.fullTime.home,
+            details.score.fullTime.away,
+            details.events,
+            details.venue,
+            details.statistics
+          );
+
+          return details;
       } catch {
           console.warn(`[FootballService] Could not get details from ApiFootball for ${id}, trying FootballData...`);
           return await this.footballData.getMatchDetails(id);
       }
   }
  
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async getUpcomingMatches(_teamNames: string[]): Promise<Match[]> {
       return [];
   }

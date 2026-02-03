@@ -1,6 +1,6 @@
 
 import { pool } from '../db.js';
-import { Match, MatchEvent } from '../services/interfaces.js';
+import { Match, MatchEvent, MatchStatistic } from '../services/interfaces.js';
 
 import { leagueService } from '../services/leagueService.js';
 
@@ -25,6 +25,7 @@ export const matchRepository = {
         away_team_id, away_team, away_team_crest, away_score,
         competition, competition_emblem, stage, group_name,
         provider, competition_id,
+        venue, statistics,
         last_updated
       ) VALUES (
         $1, $2, $3, $4,
@@ -32,6 +33,7 @@ export const matchRepository = {
         $9, $10, $11, $12,
         $13, $14, $15, $16,
         $17, $18,
+        $19, $20,
         CURRENT_TIMESTAMP
       )
       ON CONFLICT(id) DO UPDATE SET
@@ -42,6 +44,8 @@ export const matchRepository = {
         away_score=excluded.away_score,
         provider=excluded.provider,
         competition_id=excluded.competition_id,
+        venue=excluded.venue,
+        statistics=excluded.statistics,
         last_updated=CURRENT_TIMESTAMP
     `;
     
@@ -63,7 +67,9 @@ export const matchRepository = {
         match.stage,
         match.group,
         match.provider || 'football-data',
-        match.competition.id
+        match.competition.id,
+        match.venue || null,
+        JSON.stringify(match.statistics || [])
     ];
 
     try {
@@ -124,13 +130,13 @@ export const matchRepository = {
       }
   },
 
-  async updateMatchStatus(id: number, status: string, minute: number | null, homeScore: number | null, awayScore: number | null, events: MatchEvent[] = []) {
+  async updateMatchStatus(id: number, status: string, minute: number | null, homeScore: number | null, awayScore: number | null, events: MatchEvent[] = [], venue: string | null = null, statistics: MatchStatistic[] = []) {
     try {
         await pool.query(`
             UPDATE matches 
-            SET status = $1, minute = $2, home_score = $3, away_score = $4, last_updated = CURRENT_TIMESTAMP
+            SET status = $1, minute = $2, home_score = $3, away_score = $4, venue = $6, statistics = $7, last_updated = CURRENT_TIMESTAMP
             WHERE id = $5
-        `, [status, minute, homeScore, awayScore, id]);
+        `, [status, minute, homeScore, awayScore, id, venue, JSON.stringify(statistics)]);
 
         if (events.length > 0) {
             await pool.query('DELETE FROM events WHERE match_id = $1', [id]);
@@ -214,7 +220,9 @@ export const matchRepository = {
           },
           stage: row.stage,
           group: row.group_name,
-          provider: row.provider
+          provider: row.provider,
+          venue: row.venue,
+          statistics: row.statistics || []
       };
   },
 
@@ -222,7 +230,9 @@ export const matchRepository = {
       const result = await pool.query('SELECT * FROM matches WHERE id = $1', [id]);
       if (result.rows.length === 0) return null;
       
-      return this.mapRowToMatch(result.rows[0]);
+      const match = this.mapRowToMatch(result.rows[0]);
+      const matchesWithEvents = await this.attachEventsToMatches([match]);
+      return matchesWithEvents[0];
   },
 
   async getMatchesNeedingUpdates(dateStr: string): Promise<Match[]> {

@@ -130,6 +130,52 @@ export class FootballService {
                 // If Primary fails, we have NO schedule.
                 // We return empty array.
             }
+        } else if (date === today) {
+            // ON-DEMAND SYNC CHECK
+            // If we have matches in DB for today, check if we need to sync live scores
+            try {
+                // 1. Check for active matches in the current set
+                const now = new Date();
+                const twentyMinsFromNow = new Date(now.getTime() + 20 * 60000);
+                
+                const hasActiveMatches = baseMatches.some(m => {
+                    const matchDate = new Date(m.utcDate);
+                    const isLive = ['IN_PLAY', 'PAUSED', 'HALFTIME', 'LIVE', '1H', '2H', 'ET', 'P', 'BT', 'INT'].includes(m.status);
+                    const isStartingSoon = m.status === 'SCHEDULED' && matchDate <= twentyMinsFromNow;
+                    return isLive || isStartingSoon;
+                });
+
+                if (hasActiveMatches) {
+                    // 2. Check rate limit via Audit Log
+                    const lastSync = await auditService.getLastSyncTime('syncLiveMatches');
+                    const minIntervalMs = 15 * 60 * 1000; // 15 minutes
+                    
+                    const timeSinceLastSync = lastSync ? (now.getTime() - lastSync.getTime()) : Infinity;
+
+                    if (timeSinceLastSync > minIntervalMs) {
+                        console.log(`[FootballService] On-demand sync triggered. Last sync was ${(timeSinceLastSync / 60000).toFixed(1)} mins ago.`);
+                        // Fire sync (this logs 'syncLiveMatches' to audit)
+                        await this.syncLiveMatches();
+                        
+                        // 3. Reload matches from DB to get the updates
+                        baseMatches = await matchRepository.getMatchesByDate(date);
+                        // Re-filter just in case
+                         baseMatches = baseMatches.filter(m => {
+                            if (!m.competition.id) return false;
+                             if (m.provider === 'football-data') {
+                                 return allowedFdIds.includes(m.competition.id);
+                             } else if (m.provider === 'api-football') {
+                                 return allowedAfIds.includes(m.competition.id);
+                             }
+                             return false;
+                        });
+                    } else {
+                        console.log(`[FootballService] Skipping on-demand sync. Last sync was ${(timeSinceLastSync / 60000).toFixed(1)} mins ago (Limit: 15m).`);
+                    }
+                }
+            } catch (e) {
+                console.error('[FootballService] Error in on-demand sync check:', e);
+            }
         }
 
         // Return what we have in DB (or what we just fetched)

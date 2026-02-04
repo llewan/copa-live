@@ -15,6 +15,21 @@ export class AuditService {
       console.error('[AuditService] Error logging action:', error);
     }
   }
+
+  async getLastSyncTime(action: string): Promise<Date | null> {
+    try {
+      const result = await pool.query(
+        'SELECT timestamp FROM audit_logs WHERE action = $1 ORDER BY timestamp DESC LIMIT 1',
+        [action]
+      );
+      
+      if (result.rows.length === 0) return null;
+      return new Date(result.rows[0].timestamp);
+    } catch (error) {
+      console.error('[AuditService] Error getting last sync time:', error);
+      return null;
+    }
+  }
 }
 
 export const auditService = new AuditService();

@@ -1,224 +1,104 @@
-import { IFootballProvider, Match, MatchDetail } from './interfaces.js';
-import { FootballDataOrgAdapter } from './providers/football-data/adapter.js';
+import { Match, MatchDetail } from './interfaces.js';
 import { ApiFootballComAdapter } from './providers/api-football/adapter.js';
 import { matchRepository } from '../repositories/matchRepository.js';
 import { leagueService } from './leagueService.js';
 import { auditService } from './auditService.js';
-import { TeamNameMatcher } from './teamNameMatcher.js';
 import { syncStatusRepository } from '../repositories/syncStatusRepository.js';
 
 export class FootballService {
-  private footballData: FootballDataOrgAdapter;
   private apiFootball: ApiFootballComAdapter;
 
-  constructor(
-    footballData?: FootballDataOrgAdapter,
-    apiFootball?: ApiFootballComAdapter
-  ) {
-    this.footballData = footballData || new FootballDataOrgAdapter();
+  constructor(apiFootball?: ApiFootballComAdapter) {
     this.apiFootball = apiFootball || new ApiFootballComAdapter();
   }
 
-  private async configureAdapters() {
+  private async configureAdapter() {
     try {
       const allowedLeagues = await leagueService.getAllowedLeagues();
-      
-      let fdIds: number[] = [];
       let afIds: number[] = [];
 
       if (allowedLeagues.length === 0) {
           console.warn('[FootballService] No allowed leagues found in DB. Using defaults.');
-          // Default fallback to ensure system works even if DB is empty
-          fdIds = [2021, 2001, 2014, 2015]; // PL, CL, PD, FL1
-          afIds = [39, 2, 140, 61];
+          afIds = [39, 2, 140, 61]; // PL, CL, PD, FL1
       } else {
-          fdIds = allowedLeagues.map(l => l.football_data_id).filter(id => id);
           afIds = allowedLeagues.map(l => l.api_football_id).filter(id => id);
       }
       
-      this.footballData.setAllowedLeagues(fdIds);
       this.apiFootball.setAllowedLeagues(afIds);
     } catch (e) {
-      console.error('[FootballService] Error configuring adapters:', e);
+      console.error('[FootballService] Error configuring adapter:', e);
     }
-  }
-
-  private getProvider(date: string): IFootballProvider {
-    const today = new Date().toISOString().split('T')[0];
-    // Strategy:
-    // 1. Livescore / Today -> ApiFootball (better data, live events)
-    // 2. Historical / Scheduled -> FootballData (cheaper, good for schedules)
-    if (date === today) {
-        return this.apiFootball;
-    }
-    return this.footballData;
   }
 
   async getMatches(dateStr?: string): Promise<Match[]> {
     const date = dateStr || new Date().toISOString().split('T')[0];
     const today = new Date().toISOString().split('T')[0];
     
-    // Audit Log
     auditService.log('getMatches', `Fetching matches for ${date}`);
 
-    // Ensure adapters are configured with latest allowed leagues
-    await this.configureAdapters();
-
-    // 1. Try DB first (Cache)
-    // For today, we might want fresh data, so we might skip DB or check last_updated.
-    // Existing logic for today was: Sync 10 days, then return today.
-    
-    // New Logic with Adapters:
-    
     try {
-        // "Primary sets matches": ALWAYS start with what Football-Data knows (via DB or API)
-        // Check DB for schedule first
-        let baseMatches = await matchRepository.getMatchesByDate(date);
+        // 1. Fetch from DB (Cache First Strategy)
+        let matches = await matchRepository.getMatchesByDate(date);
 
-        // Filter matches by allowed leagues to ensure no "garbage" from DB is shown
-        const allowedLeagues = await leagueService.getAllowedLeagues();
-        
-        let allowedFdIds: number[] = [];
-        let allowedAfIds: number[] = [];
-
-        if (allowedLeagues.length === 0) {
-             // Fallback if DB is empty to prevent deleting all matches
-             allowedFdIds = [2021, 2001, 2014, 2015];
-             allowedAfIds = [39, 2, 140, 61];
-        } else {
-             allowedFdIds = allowedLeagues.map(l => l.football_data_id).filter(id => id);
-             allowedAfIds = allowedLeagues.map(l => l.api_football_id).filter(id => id);
-        }
-
-        // CLEANUP: Delete invalid matches from DB to fix the issue "once and for all"
-        const invalidMatches = baseMatches.filter(m => {
-             if (!m.competition.id) return true;
-             if (m.provider === 'football-data') {
-                 return !allowedFdIds.includes(m.competition.id);
-             } else if (m.provider === 'api-football') {
-                 return !allowedAfIds.includes(m.competition.id);
-             }
-             return true;
-        });
-        
-        if (invalidMatches.length > 0) {
-            console.log(`[FootballService] Found ${invalidMatches.length} invalid matches in DB. Deleting...`);
-            for (const m of invalidMatches) {
-                // Now we have deleteMatch
+        // SELF-HEALING: Remove old provider data
+        // If we find matches from 'football-data', we must delete them to avoid duplicates/stale data
+        const oldProviderMatches = matches.filter(m => m.provider === 'football-data');
+        if (oldProviderMatches.length > 0) {
+            console.log(`[FootballService] Found ${oldProviderMatches.length} matches from old provider. Deleting...`);
+            for (const m of oldProviderMatches) {
                 await matchRepository.deleteMatch(m.id);
             }
+            matches = matches.filter(m => m.provider !== 'football-data');
         }
 
-        baseMatches = baseMatches.filter(m => {
-             // If competition.id is missing (old data), filter it out to force re-fetch
-             if (!m.competition.id) return false;
-             
-             if (m.provider === 'football-data') {
-                 return allowedFdIds.includes(m.competition.id);
-             } else if (m.provider === 'api-football') {
-                 return allowedAfIds.includes(m.competition.id);
-             }
-             return false;
-        });
+        // 2. If it's NOT today, return DB result (Historical/Future should be synced via Cron)
+        if (date !== today) {
+             return matches;
+        }
+
+        // 3. Today's Matches Logic (On-Demand Sync)
+        await this.configureAdapter();
+
+        // Check if we need to sync live matches
+        // Conditions:
+        // a) DB has matches that are LIVE or STARTING SOON
+        // b) OR DB is empty (first load of the day if cron failed)
+        // c) AND Rate limit allows it
         
-        // If DB is empty or we suspect it's stale (we don't track staleness well yet, but let's assume if empty), fetch from Primary
-        // FLAG CHECK: Check if this day is marked as "synced"
-        const isSynced = await syncStatusRepository.getStatus(date) === 'synced';
+        const now = new Date();
+        const twentyMinsFromNow = new Date(now.getTime() + 20 * 60000);
+        
+        const hasActiveMatches = matches.some(m => {
+            const matchDate = new Date(m.utcDate);
+            const isLive = ['IN_PLAY', 'PAUSED', 'HALFTIME', 'LIVE', '1H', '2H', 'ET', 'P', 'BT', 'INT'].includes(m.status);
+            const isStartingSoon = m.status === 'SCHEDULED' && matchDate <= twentyMinsFromNow;
+            return isLive || isStartingSoon;
+        });
 
-        if (baseMatches.length === 0 && !isSynced) {
-            console.log(`[FootballService] No matches in DB for ${date} and not marked as synced. Fetching from Primary (Football-Data) for next 10 days...`);
-            try {
-                // Fetch schedule for Today -> Today + 10 days
-                // This ensures we populate the DB for the near future
-                const startDate = today;
+        // Check if synced recently
+        const lastSync = await auditService.getLastSyncTime('syncLiveMatches');
+        const minIntervalMs = 15 * 60 * 1000; // 15 minutes
+        const timeSinceLastSync = lastSync ? (now.getTime() - lastSync.getTime()) : Infinity;
 
-                await this.syncUpcomingSchedule(startDate);
-                
-                // Re-fetch from DB after sync
-                baseMatches = await matchRepository.getMatchesByDate(date);
-                
-                // Re-filter by allowed leagues just in case
-                baseMatches = baseMatches.filter(m => {
-                    if (!m.competition.id) return false;
-                    return allowedFdIds.includes(m.competition.id);
-                });
+        // If DB is empty, we force sync regardless of active matches (to populate the day)
+        // If DB has matches, we only sync if there are active matches
+        const shouldSync = (matches.length === 0 || hasActiveMatches) && timeSinceLastSync > minIntervalMs;
 
-            } catch (e) {
-                console.error('[FootballService] Primary API failed to set schedule:', e);
-                // If Primary fails, we have NO schedule.
-                
-                // FALLBACK: If today, try Secondary API just to show something
-                if (date === today) {
-                    console.log('[FootballService] Attempting fallback to Secondary API for today...');
-                    try {
-                        const secondaryMatches = await this.apiFootball.getMatches(today);
-                        
-                        // Use the IDs we computed earlier (with fallback)
-                        const validMatches = secondaryMatches.filter(m => m.competition.id && allowedAfIds.includes(m.competition.id));
-                        
-                        if (validMatches.length > 0) {
-                            console.log(`[FootballService] Fallback retrieved ${validMatches.length} matches.`);
-                             for (const m of validMatches) {
-                                await matchRepository.upsertMatch({ ...m, provider: 'api-football' });
-                            }
-                            baseMatches = await matchRepository.getMatchesByDate(date);
-                        }
-                    } catch (err) {
-                        console.error('[FootballService] Secondary API fallback failed:', err);
-                    }
-                }
-            }
-        } else if (date === today) {
-            // ON-DEMAND SYNC CHECK
-            // If we have matches in DB for today, check if we need to sync live scores
-            try {
-                // 1. Check for active matches in the current set
-                const now = new Date();
-                const twentyMinsFromNow = new Date(now.getTime() + 20 * 60000);
-                
-                const hasActiveMatches = baseMatches.some(m => {
-                    const matchDate = new Date(m.utcDate);
-                    const isLive = ['IN_PLAY', 'PAUSED', 'HALFTIME', 'LIVE', '1H', '2H', 'ET', 'P', 'BT', 'INT'].includes(m.status);
-                    const isStartingSoon = m.status === 'SCHEDULED' && matchDate <= twentyMinsFromNow;
-                    return isLive || isStartingSoon;
-                });
-
-                if (hasActiveMatches) {
-                    // 2. Check rate limit via Audit Log
-                    const lastSync = await auditService.getLastSyncTime('syncLiveMatches');
-                    const minIntervalMs = 15 * 60 * 1000; // 15 minutes
-                    
-                    const timeSinceLastSync = lastSync ? (now.getTime() - lastSync.getTime()) : Infinity;
-
-                    if (timeSinceLastSync > minIntervalMs) {
-                        console.log(`[FootballService] On-demand sync triggered. Last sync was ${(timeSinceLastSync / 60000).toFixed(1)} mins ago.`);
-                        // Fire sync (this logs 'syncLiveMatches' to audit)
-                        await this.syncLiveMatches();
-                        
-                        // 3. Reload matches from DB to get the updates
-                        baseMatches = await matchRepository.getMatchesByDate(date);
-                        // Re-filter just in case
-                         baseMatches = baseMatches.filter(m => {
-                            if (!m.competition.id) return false;
-                             if (m.provider === 'football-data') {
-                                 return allowedFdIds.includes(m.competition.id);
-                             } else if (m.provider === 'api-football') {
-                                 return allowedAfIds.includes(m.competition.id);
-                             }
-                             return false;
-                        });
-                    } else {
-                        console.log(`[FootballService] Skipping on-demand sync. Last sync was ${(timeSinceLastSync / 60000).toFixed(1)} mins ago (Limit: 15m).`);
-                    }
-                }
-            } catch (e) {
-                console.error('[FootballService] Error in on-demand sync check:', e);
-            }
+        if (shouldSync) {
+             console.log(`[FootballService] On-demand sync triggered. Last sync was ${(timeSinceLastSync / 60000).toFixed(1)} mins ago.`);
+             
+             // Trigger Sync
+             await this.syncLiveMatches(); // This updates DB
+             
+             // Reload from DB
+             matches = await matchRepository.getMatchesByDate(date);
+        } else {
+             if (hasActiveMatches) {
+                 console.log(`[FootballService] Skipping sync (Rate Limit). Last sync: ${(timeSinceLastSync / 60000).toFixed(1)}m ago.`);
+             }
         }
 
-        // Return what we have in DB (or what we just fetched)
-        // We do NOT query Secondary API here anymore. That is handled by syncLiveMatches.
-        return baseMatches;
+        return matches;
 
     } catch (error) {
         console.error('[FootballService] Error getting matches:', error);
@@ -226,155 +106,34 @@ export class FootballService {
     }
   }
 
-  private async checkAndResolveFinishedMatches(baseMatches: Match[], liveMatches: Match[], date: string) {
-      // Identify matches that are supposedly Live in DB but missing from Live Feed
-      const potentiallyFinished = baseMatches.filter(base => {
-          const isLiveInDb = ['IN_PLAY', 'PAUSED', 'HALFTIME'].includes(base.status); // Add other live statuses if needed
-          if (!isLiveInDb) return false;
-
-          // Check if it exists in liveMatches
-          const foundInLive = liveMatches.some(live => {
-              const homeMatch = TeamNameMatcher.areTeamsSame(base.homeTeam.name, live.homeTeam.name);
-              const awayMatch = TeamNameMatcher.areTeamsSame(base.awayTeam.name, live.awayTeam.name);
-              return homeMatch && awayMatch;
-          });
-
-          return !foundInLive;
-      });
-
-      if (potentiallyFinished.length === 0) return;
-
-      console.log(`[FootballService] Found ${potentiallyFinished.length} matches that might have just finished. Verifying...`);
-
-      // We need to fetch the full schedule to find the API-Football ID and final status
-      try {
-          const allToday = await this.apiFootball.getMatches(date);
-          
-          for (const base of potentiallyFinished) {
-              // Find the match in the full list
-              const matchInAll = allToday.find(m => {
-                  const homeMatch = TeamNameMatcher.areTeamsSame(base.homeTeam.name, m.homeTeam.name);
-                  const awayMatch = TeamNameMatcher.areTeamsSame(base.awayTeam.name, m.awayTeam.name);
-                  return homeMatch && awayMatch;
-              });
-
-              if (matchInAll && ['FINISHED', 'FT', 'AET', 'PEN'].includes(matchInAll.status)) {
-                  console.log(`[FootballService] Match finished: ${base.homeTeam.name} vs ${base.awayTeam.name}. Fetching details for goals...`);
-                  
-                  // CRITICAL: Fetch details to get goal scorers/events
-                  try {
-                      const details = await this.apiFootball.getMatchDetails(matchInAll.id);
-                      
-                      await matchRepository.updateMatchStatus(
-                      base.id,
-                      details.status,
-                      details.minute, // Should be 90 or 120
-                      details.score.fullTime.home,
-                      details.score.fullTime.away,
-                      details.events, // Save final events!
-                      details.venue,
-                      details.statistics
-                  );
-                  } catch (err) {
-                      console.error(`[FootballService] Failed to fetch details for finished match ${matchInAll.id}:`, err);
-                  }
-              }
-          }
-      } catch (e) {
-          console.error('[FootballService] Failed to resolve finished matches:', e);
-      }
-  }
-
-  private async mergeAndSaveUpdates(baseMatches: Match[], liveMatches: Match[]) {
-      const allowedLeagues = await leagueService.getAllowedLeagues();
-
-      for (const base of baseMatches) {
-          // 1. Resolve League ID mapping
-          // We need to know what the Api-Football League ID is for this Football-Data match
-          const leagueConfig = allowedLeagues.find(l => l.football_data_id === base.competition.id);
-          
-          // If no mapping exists, we can't safely link them (or we fall back to global search, but that's risky)
-          if (!leagueConfig || !leagueConfig.api_football_id) {
-              continue;
-          }
-          const targetLeagueId = leagueConfig.api_football_id;
-
-          // 2. Filter Candidates by League
-          // liveMatches already have mapped competition.id = Api-Football League ID
-          let candidates = liveMatches.filter(m => m.competition.id === targetLeagueId);
-
-          // 3. Filter by Time (Kickoff within 4 hours)
-          // To handle timezones and slight delays, but ensure we don't match a morning game with an evening game if teams played twice (rare)
-          const baseTime = new Date(base.utcDate).getTime();
-          candidates = candidates.filter(m => {
-              const liveTime = new Date(m.utcDate).getTime();
-              const diffHours = Math.abs(liveTime - baseTime) / (1000 * 60 * 60);
-              return diffHours < 4; 
-          });
-
-          if (candidates.length === 0) continue;
-
-          // 4. Match Teams using Robust Matcher
-          const update = candidates.find(live => {
-              const homeMatch = TeamNameMatcher.areTeamsSame(base.homeTeam.name, live.homeTeam.name);
-              const awayMatch = TeamNameMatcher.areTeamsSame(base.awayTeam.name, live.awayTeam.name);
-              return homeMatch && awayMatch;
-          });
-
-          if (update) {
-              // Update DB with fresh status/score from Secondary
-              console.log(`[FootballService] Linked & Updated: ${base.homeTeam.name} vs ${base.awayTeam.name} (Status: ${update.status})`);
-              await matchRepository.updateMatchStatus(
-                  base.id, 
-                  update.status, 
-                  update.minute, 
-                  update.score.fullTime.home, 
-                  update.score.fullTime.away,
-                  update.events, // Update events too
-                  update.venue,
-                  update.statistics
-              );
-          } else {
-             // Debug log to help diagnose missing links
-             console.log(`[FootballService] No match found for ${base.homeTeam.name} vs ${base.awayTeam.name} among ${candidates.length} candidates.`);
-             candidates.forEach(c => console.log(` - Candidate: ${c.homeTeam.name} vs ${c.awayTeam.name}`));
-          }
-      }
-  }
-
-  private async syncUpcomingSchedule(startDate: string) {
-      // Sync next 10 days using Football-Data (as per requirements: "scheduled (up to 10 days) use football-data")
+  async syncUpcomingSchedule(startDate: string) {
+      // Sync next 7 days using API-Football
       const addDays = (d: string, days: number) => {
           const date = new Date(d);
           date.setDate(date.getDate() + days);
           return date.toISOString().split('T')[0];
       };
-      const toDate = addDays(startDate, 10);
+      const toDate = addDays(startDate, 7);
       
-      console.log(`[FootballService] Syncing schedule from ${startDate} to ${toDate} using Football-Data...`);
+      console.log(`[FootballService] Syncing schedule from ${startDate} to ${toDate} using API-Football...`);
       
-      // Ensure configuration
-      await this.configureAdapters();
-
-      const allowedLeagues = await leagueService.getAllowedLeagues();
-      const allowedFdIds = allowedLeagues.map(l => l.football_data_id).filter(id => id);
+      await this.configureAdapter();
 
       try {
-          const matches = await this.footballData.getMatchesRange(startDate, toDate);
+          const matches = await this.apiFootball.getMatchesRange(startDate, toDate);
           
-          // Strict validation before saving
-          const validMatches = matches.filter(m => m.competition.id && allowedFdIds.includes(m.competition.id));
-
-          if (validMatches.length < matches.length) {
-              console.warn(`[FootballService] Blocked ${matches.length - validMatches.length} matches from unallowed leagues during sync.`);
+          if (matches.length === 0) {
+              console.log('[FootballService] No matches found for schedule.');
+              return;
           }
 
-          for (const m of validMatches) {
-              await matchRepository.upsertMatch({ ...m, provider: 'football-data' });
+          console.log(`[FootballService] Found ${matches.length} matches. Upserting...`);
+
+          for (const m of matches) {
+              await matchRepository.upsertMatch({ ...m, provider: 'api-football' });
           }
 
-          // MARK DAYS AS SYNCED
-          // We iterate from startDate to toDate and mark each as synced
+          // Mark days as synced
           const curr = new Date(startDate);
           const end = new Date(toDate);
           while (curr <= end) {
@@ -383,105 +142,63 @@ export class FootballService {
               curr.setDate(curr.getDate() + 1);
           }
 
-          console.log(`[FootballService] Synced ${validMatches.length} upcoming matches and marked days as synced.`);
+          console.log(`[FootballService] Synced schedule successfully.`);
       } catch (e) {
           console.error('[FootballService] Schedule sync failed:', e);
-          throw e; // Rethrow so caller knows it failed
+          throw e;
       }
   }
 
   async syncLiveMatches(): Promise<void> {
       const today = new Date().toISOString().split('T')[0];
-      auditService.log('syncLiveMatches', `Checking for live matches to sync for ${today}`);
+      auditService.log('syncLiveMatches', `Syncing live matches for ${today}`);
 
-      // 1. Check if we need to poll
-      // We look for matches that are Live or about to start
-      const matchesNeedingUpdate = await matchRepository.getMatchesNeedingUpdates(today);
+      await this.configureAdapter();
       
-      const now = new Date();
-      const fiveMinsFromNow = new Date(now.getTime() + 5 * 60000);
-
-      const activeMatches = matchesNeedingUpdate.filter(m => {
-          const matchDate = new Date(m.utcDate);
-          const isLive = ['IN_PLAY', 'PAUSED', 'HALFTIME', 'LIVE', '1H', '2H', 'ET', 'P', 'BT', 'INT'].includes(m.status);
+      try {
+          // Fetch all matches for today from API-Football
+          // This includes Live, Finished, Scheduled - everything for today.
+          // This is "one API call" to refresh the whole day.
+          const matches = await this.apiFootball.getMatches(today);
           
-          // Check if starting soon (within 5 mins) OR started recently (past start time)
-          // We include matches that should have started but are still SCHEDULED in DB
-          const isTimeRelevant = matchDate <= fiveMinsFromNow;
-          
-          return isLive || (m.status === 'SCHEDULED' && isTimeRelevant);
-      });
-
-      if (activeMatches.length > 0) {
-          console.log(`[FootballService] Found ${activeMatches.length} active/upcoming matches. Polling Secondary API (API-Football)...`);
-          
-          // 2. Poll Secondary API
-          await this.configureAdapters();
-          try {
-              // User requested: "consultar la api secundaria con todos los partidos de las 4 ligas que soportamos para el dia de hoy"
-              const secondaryMatches = await this.apiFootball.getMatches(today);
-              
-              if (secondaryMatches.length > 0) {
-                  console.log(`[FootballService] Secondary API returned ${secondaryMatches.length} matches. Merging...`);
-                  
-                  // 3. Update DB
-                  // We fetch all DB matches for today to ensure we have the full context for linking
-                  const allDbMatches = await matchRepository.getMatchesByDate(today);
-                  
-                  await this.mergeAndSaveUpdates(allDbMatches, secondaryMatches);
-                  
-                  // Handle matches that finished since last poll
-                  await this.checkAndResolveFinishedMatches(allDbMatches, secondaryMatches, today);
-              } else {
-                  console.log('[FootballService] Secondary API returned no matches for today.');
+          if (matches.length > 0) {
+              console.log(`[FootballService] Received ${matches.length} matches for today. Updating DB...`);
+              for (const m of matches) {
+                  // Update detailed status including events and stats
+                  await matchRepository.updateMatchStatus(
+                      m.id,
+                      m.status,
+                      m.minute,
+                      m.score.fullTime.home,
+                      m.score.fullTime.away,
+                      m.events,
+                      m.venue,
+                      m.statistics
+                  );
+                  // Also upsert to ensure provider and other metadata are correct
+                   await matchRepository.upsertMatch({ ...m, provider: 'api-football' });
               }
-              
-          } catch (e) {
-              console.error('[FootballService] Error during live sync:', e);
+          } else {
+              console.log('[FootballService] No matches returned for today.');
           }
-      } else {
-          // 3. Fallback: No Live matches -> Sync with Primary API (Football-Data)
-          // "Solamente en el caso de no haber eventos sincronizar con la basde de datos primaria"
-          // This ensures that if a match finished or was postponed, we get the update without using Secondary quota.
-          console.log('[FootballService] No active live matches. Syncing with Primary API (Football-Data) to ensure consistency...');
-          
-          await this.configureAdapters();
-          try {
-              // We fetch today's matches from Primary
-              const primaryMatches = await this.footballData.getMatches(today);
-              
-              const allowedLeagues = await leagueService.getAllowedLeagues();
-              const allowedFdIds = allowedLeagues.map(l => l.football_data_id).filter(id => id);
-
-              // Filter and Upsert
-              const validMatches = primaryMatches.filter(m => m.competition.id && allowedFdIds.includes(m.competition.id));
-              
-              for (const m of validMatches) {
-                  // We upsert. If it was SCHEDULED and is now FINISHED in Primary, this will update it.
-                  await matchRepository.upsertMatch({ ...m, provider: 'football-data' });
-              }
-              console.log(`[FootballService] Synced ${validMatches.length} matches from Primary API.`);
-              
-          } catch (e) {
-               console.error('[FootballService] Error syncing with Primary API:', e);
-          }
+      } catch (e) {
+          console.error('[FootballService] Error during live sync:', e);
       }
   }
 
   async getMatchDetails(id: number): Promise<MatchDetail> {
       auditService.log('getMatchDetails', `Fetching details for match ${id}`);
-      await this.configureAdapters();
+      await this.configureAdapter();
 
       // 1. Try DB First to save API quota
       try {
           const dbMatch = await matchRepository.getMatchById(id);
           if (dbMatch) {
-              // If match has events/stats, or is SCHEDULED (no stats needed yet), return it
-              // We assume if events/stats are empty in DB, it might mean we haven't synced them yet.
-              // But for SCHEDULED matches, they are naturally empty.
               const isScheduled = dbMatch.status === 'SCHEDULED' || dbMatch.status === 'TIMED' || dbMatch.status === 'POSTPONED';
+              // Check if we have detailed data
               const hasData = (dbMatch.events && dbMatch.events.length > 0) || (dbMatch.statistics && dbMatch.statistics.length > 0);
               
+              // If it's scheduled (no data expected) or we have data, return DB
               if (isScheduled || hasData) {
                   return {
                       ...dbMatch,
@@ -489,18 +206,17 @@ export class FootballService {
                       statistics: dbMatch.statistics || []
                   } as MatchDetail;
               }
-              // If LIVE/FINISHED and no data, we proceed to fetch from API.
+              // If Live/Finished and missing data, fetch from API
           }
       } catch (e) {
           console.warn('[FootballService] DB lookup failed for details:', e);
       }
 
-      // 2. Try to determine provider. 
-      // If we don't know, we try ApiFootball first (better details), then FootballData.
+      // 2. Fetch from API
       try {
           const details = await this.apiFootball.getMatchDetails(id);
           
-          // Save to DB so next time we hit cache
+          // Update DB
           await matchRepository.updateMatchStatus(
             details.id,
             details.status,
@@ -513,12 +229,12 @@ export class FootballService {
           );
 
           return details;
-      } catch {
-          console.warn(`[FootballService] Could not get details from ApiFootball for ${id}, trying FootballData...`);
-          return await this.footballData.getMatchDetails(id);
+      } catch (error) {
+          console.error(`[FootballService] Could not get details for ${id}:`, error);
+          throw error;
       }
   }
- 
+
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async getUpcomingMatches(_teamNames: string[]): Promise<Match[]> {
       return [];

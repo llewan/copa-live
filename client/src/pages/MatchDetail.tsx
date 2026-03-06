@@ -32,9 +32,28 @@ export const MatchDetail = () => {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 300000);
-    return () => clearInterval(interval);
   }, [fetchData]);
+
+  useEffect(() => {
+    const POLLING_INTERVAL_ACTIVE = 5 * 60 * 1000;
+    const POLLING_INTERVAL_INACTIVE = 60 * 60 * 1000;
+
+    let intervalMs = POLLING_INTERVAL_INACTIVE;
+    if (match) {
+        const isLive = ['IN_PLAY', 'PAUSED', 'HALFTIME', 'LIVE', '1H', '2H', 'ET', 'P', 'BT', 'INT'].includes(match.status);
+        const matchDate = new Date(match.utcDate);
+        const now = new Date();
+        const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+        const isStartingSoon = match.status === 'SCHEDULED' && matchDate <= twoHoursFromNow;
+        
+        if (isLive || isStartingSoon) {
+            intervalMs = POLLING_INTERVAL_ACTIVE;
+        }
+    }
+    
+    const interval = setInterval(fetchData, intervalMs);
+    return () => clearInterval(interval);
+  }, [fetchData, match]);
 
   if (loading && !match) {
     return (

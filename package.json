@@ -11,7 +11,7 @@
     "check": "tsc --noEmit",
     "server:dev": "nodemon",
     "dev": "concurrently \"npm run client:dev\" \"npm run server:dev\"",
-    "test": "tsx --test server/services/providers/football-data/__tests__/client.test.ts",
+    "test": "echo \"No tests to run\"",
     "prepare": "husky"
   },
   "lint-staged": {

@@ -71,10 +71,12 @@ export const Dashboard = () => {
   // Generate calendar days based on selected date
   const days = useMemo(() => generateCalendarDays(selectedDate, i18n.language), [selectedDate, i18n.language]);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (isBackground = false) => {
     try {
       setError(null);
-      setLoading(true); // Always show loading when date changes
+      // Only show full loading state on initial load or date change, not background refresh
+      if (!isBackground && matches.length === 0) setLoading(true); 
+      
       const data = await getMatches(selectedDate);
       setMatches(data);
       setLastUpdated(new Date());
@@ -83,14 +85,40 @@ export const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedDate]);
+  }, [selectedDate]); // matches length is checked via closure but that's fine for initial load check
+
+  // Smart Polling Logic
+  useEffect(() => {
+    fetchData(false);
+  }, [fetchData]);
 
   useEffect(() => {
-    fetchData();
-    // Refresh data every 5 minutes (300000ms) to save queries
-    const interval = setInterval(fetchData, 300000);
+    const POLLING_INTERVAL_ACTIVE = 5 * 60 * 1000; // 5 minutes
+    const POLLING_INTERVAL_INACTIVE = 60 * 60 * 1000; // 1 hour
+
+    let intervalMs = POLLING_INTERVAL_INACTIVE;
+    const today = format(new Date(), 'yyyy-MM-dd');
+    
+    if (selectedDate === today) {
+        const now = new Date();
+        const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+        
+        const hasActiveMatches = matches.some(m => {
+            const matchDate = new Date(m.utcDate);
+            const isLive = ['IN_PLAY', 'PAUSED', 'HALFTIME', 'LIVE', '1H', '2H', 'ET', 'P', 'BT', 'INT'].includes(m.status);
+            const isStartingSoon = m.status === 'SCHEDULED' && matchDate <= twoHoursFromNow;
+            return isLive || isStartingSoon;
+        });
+        
+        if (hasActiveMatches) {
+            intervalMs = POLLING_INTERVAL_ACTIVE;
+        }
+    }
+
+    console.log(`[Dashboard] Polling set to ${intervalMs / 60000} minutes`);
+    const interval = setInterval(() => fetchData(true), intervalMs);
     return () => clearInterval(interval);
-  }, [fetchData]); // Re-fetch when selectedDate changes
+  }, [fetchData, matches, selectedDate]);
 
   // Group matches by competition
   const groupedMatches = useMemo(() => {

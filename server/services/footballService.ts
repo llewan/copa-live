@@ -5,6 +5,7 @@ import { matchRepository } from '../repositories/matchRepository.js';
 import { leagueService } from './leagueService.js';
 import { auditService } from './auditService.js';
 import { TeamNameMatcher } from './teamNameMatcher.js';
+import { syncStatusRepository } from '../repositories/syncStatusRepository.js';
 
 export class FootballService {
   private footballData: FootballDataOrgAdapter;
@@ -99,25 +100,20 @@ export class FootballService {
         });
         
         // If DB is empty or we suspect it's stale (we don't track staleness well yet, but let's assume if empty), fetch from Primary
-        if (baseMatches.length === 0) {
-            console.log(`[FootballService] No matches in DB for ${date}. Fetching from Primary (Football-Data) for next 10 days...`);
+        // FLAG CHECK: Check if this day is marked as "synced"
+        const isSynced = await syncStatusRepository.getStatus(date) === 'synced';
+
+        if (baseMatches.length === 0 && !isSynced) {
+            console.log(`[FootballService] No matches in DB for ${date} and not marked as synced. Fetching from Primary (Football-Data) for next 10 days...`);
             try {
                 // Fetch schedule for Today -> Today + 10 days
                 // This ensures we populate the DB for the near future
                 const startDate = today;
-                const endDate = new Date();
-                endDate.setDate(new Date(startDate).getDate() + 10);
-                const endDateStr = endDate.toISOString().split('T')[0];
 
-                const primaryMatches = await this.footballData.getMatchesRange(startDate, endDateStr);
+                await this.syncUpcomingSchedule(startDate);
                 
-                // Save immediately to establish "The Schedule"
-                for (const m of primaryMatches) {
-                    await matchRepository.upsertMatch({ ...m, provider: 'football-data' });
-                }
-                
-                // We only want to return matches for the requested 'date'
-                baseMatches = primaryMatches.filter(m => m.utcDate.startsWith(date));
+                // Re-fetch from DB after sync
+                baseMatches = await matchRepository.getMatchesByDate(date);
                 
                 // Re-filter by allowed leagues just in case
                 baseMatches = baseMatches.filter(m => {
@@ -332,11 +328,23 @@ export class FootballService {
           }
 
           for (const m of validMatches) {
-              await matchRepository.upsertMatch(m);
+              await matchRepository.upsertMatch({ ...m, provider: 'football-data' });
           }
-          console.log(`[FootballService] Synced ${validMatches.length} upcoming matches.`);
+
+          // MARK DAYS AS SYNCED
+          // We iterate from startDate to toDate and mark each as synced
+          const curr = new Date(startDate);
+          const end = new Date(toDate);
+          while (curr <= end) {
+              const d = curr.toISOString().split('T')[0];
+              await syncStatusRepository.markAsSynced(d);
+              curr.setDate(curr.getDate() + 1);
+          }
+
+          console.log(`[FootballService] Synced ${validMatches.length} upcoming matches and marked days as synced.`);
       } catch (e) {
           console.error('[FootballService] Schedule sync failed:', e);
+          throw e; // Rethrow so caller knows it failed
       }
   }
 

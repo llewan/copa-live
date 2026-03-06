@@ -78,6 +78,15 @@ const createTables = async () => {
       );
     `);
 
+    // Create daily_sync_status table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS daily_sync_status (
+        date VARCHAR(20) PRIMARY KEY,
+        status VARCHAR(20) NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     // Create users table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (

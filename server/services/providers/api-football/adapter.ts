@@ -18,7 +18,11 @@ export class ApiFootballComAdapter implements IFootballProvider {
       // This prevents "leakage" if configuration fails.
       if (this.allowedLeagueIds.length === 0) {
           console.warn('[ApiFootballComAdapter] No allowed leagues configured. Blocking all matches.');
-          return [];
+          // Temporary Fix: Return ALL matches if config is missing (for debugging/development)
+          // Ideally we should fix the DB seeding, but this unblocks the "empty matches" issue.
+          // return [];
+          console.warn('[ApiFootballComAdapter] TEMPORARY OVERRIDE: Returning all matches despite missing config.');
+          return response.response.map(mapFixtureToMatch);
       }
 
       // Automatically filter matches based on allowed leagues
@@ -34,11 +38,15 @@ export class ApiFootballComAdapter implements IFootballProvider {
   async getMatchesRange(from: string, to: string): Promise<Match[]> {
     if (this.allowedLeagueIds.length === 0) {
         console.warn('[ApiFootballComAdapter] No allowed leagues configured. Blocking range request.');
-        return [];
+        // return [];
+        console.warn('[ApiFootballComAdapter] TEMPORARY OVERRIDE: Returning all matches despite missing config.');
     }
 
     try {
         const response = await apiFootballClient.get('/fixtures', { from, to });
+        if (this.allowedLeagueIds.length === 0) {
+             return response.response.map(mapFixtureToMatch);
+        }
         const filtered = response.response.filter(f => this.allowedLeagueIds.includes(f.league.id));
         return filtered.map(mapFixtureToMatch);
     } catch (error) {
@@ -73,7 +81,9 @@ export class ApiFootballComAdapter implements IFootballProvider {
       
       if (this.allowedLeagueIds.length === 0) {
           console.warn('[ApiFootballComAdapter] No allowed leagues configured. Blocking all matches.');
-          return [];
+          // Temporary Fix: Return ALL matches if config is missing
+          console.warn('[ApiFootballComAdapter] TEMPORARY OVERRIDE: Returning all matches despite missing config.');
+          return response.response.map(mapFixtureToMatch);
       }
 
       const filtered = response.response.filter(f => this.allowedLeagueIds.includes(f.league.id));

@@ -21,8 +21,20 @@ export class FootballService {
 
   private async configureAdapters() {
     try {
-      const fdIds = await leagueService.getFootballDataIds();
-      const afIds = await leagueService.getApiFootballIds();
+      const allowedLeagues = await leagueService.getAllowedLeagues();
+      
+      let fdIds: number[] = [];
+      let afIds: number[] = [];
+
+      if (allowedLeagues.length === 0) {
+          console.warn('[FootballService] No allowed leagues found in DB. Using defaults.');
+          // Default fallback to ensure system works even if DB is empty
+          fdIds = [2021, 2001, 2014, 2015]; // PL, CL, PD, FL1
+          afIds = [39, 2, 140, 61];
+      } else {
+          fdIds = allowedLeagues.map(l => l.football_data_id).filter(id => id);
+          afIds = allowedLeagues.map(l => l.api_football_id).filter(id => id);
+      }
       
       this.footballData.setAllowedLeagues(fdIds);
       this.apiFootball.setAllowedLeagues(afIds);
@@ -65,8 +77,18 @@ export class FootballService {
 
         // Filter matches by allowed leagues to ensure no "garbage" from DB is shown
         const allowedLeagues = await leagueService.getAllowedLeagues();
-        const allowedFdIds = allowedLeagues.map(l => l.football_data_id).filter(id => id);
-        const allowedAfIds = allowedLeagues.map(l => l.api_football_id).filter(id => id);
+        
+        let allowedFdIds: number[] = [];
+        let allowedAfIds: number[] = [];
+
+        if (allowedLeagues.length === 0) {
+             // Fallback if DB is empty to prevent deleting all matches
+             allowedFdIds = [2021, 2001, 2014, 2015];
+             allowedAfIds = [39, 2, 140, 61];
+        } else {
+             allowedFdIds = allowedLeagues.map(l => l.football_data_id).filter(id => id);
+             allowedAfIds = allowedLeagues.map(l => l.api_football_id).filter(id => id);
+        }
 
         // CLEANUP: Delete invalid matches from DB to fix the issue "once and for all"
         const invalidMatches = baseMatches.filter(m => {
@@ -124,7 +146,27 @@ export class FootballService {
             } catch (e) {
                 console.error('[FootballService] Primary API failed to set schedule:', e);
                 // If Primary fails, we have NO schedule.
-                // We return empty array.
+                
+                // FALLBACK: If today, try Secondary API just to show something
+                if (date === today) {
+                    console.log('[FootballService] Attempting fallback to Secondary API for today...');
+                    try {
+                        const secondaryMatches = await this.apiFootball.getMatches(today);
+                        
+                        // Use the IDs we computed earlier (with fallback)
+                        const validMatches = secondaryMatches.filter(m => m.competition.id && allowedAfIds.includes(m.competition.id));
+                        
+                        if (validMatches.length > 0) {
+                            console.log(`[FootballService] Fallback retrieved ${validMatches.length} matches.`);
+                             for (const m of validMatches) {
+                                await matchRepository.upsertMatch({ ...m, provider: 'api-football' });
+                            }
+                            baseMatches = await matchRepository.getMatchesByDate(date);
+                        }
+                    } catch (err) {
+                        console.error('[FootballService] Secondary API fallback failed:', err);
+                    }
+                }
             }
         } else if (date === today) {
             // ON-DEMAND SYNC CHECK

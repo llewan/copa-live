@@ -40,6 +40,14 @@ const createTables = async () => {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_matches_date ON matches(match_date);');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_matches_competition_id ON matches(competition_id);');
 
+    // Add venue and statistics columns if they don't exist (Migration)
+    try {
+        await pool.query('ALTER TABLE matches ADD COLUMN IF NOT EXISTS venue VARCHAR(255)');
+        await pool.query('ALTER TABLE matches ADD COLUMN IF NOT EXISTS statistics JSONB DEFAULT \'[]\'');
+    } catch (e) {
+        console.log('Error adding columns to matches table (might already exist or not supported)', e);
+    }
+
     // Create events table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS events (

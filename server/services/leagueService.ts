@@ -8,6 +8,13 @@ export interface AllowedLeague {
   is_active: boolean;
 }
 
+const DEFAULT_ALLOWED_LEAGUES: AllowedLeague[] = [
+  { id: 1, name: 'Premier League', football_data_id: 2021, api_football_id: 39, is_active: true },
+  { id: 2, name: 'UEFA Champions League', football_data_id: 2001, api_football_id: 2, is_active: true },
+  { id: 3, name: 'Primera Division', football_data_id: 2014, api_football_id: 140, is_active: true },
+  { id: 4, name: 'Ligue 1', football_data_id: 2015, api_football_id: 61, is_active: true }
+];
+
 export class LeagueService {
   private cache: AllowedLeague[] | null = null;
   private lastFetch: number = 0;
@@ -22,12 +29,20 @@ export class LeagueService {
     try {
       // Postgres boolean fields should be queried with boolean literals (true/false)
       const result = await pool.query('SELECT * FROM allowed_leagues WHERE is_active = true');
+      if (!result.rows || result.rows.length === 0) {
+        this.cache = DEFAULT_ALLOWED_LEAGUES;
+        this.lastFetch = now;
+        return this.cache;
+      }
+
       this.cache = result.rows;
       this.lastFetch = now;
       return this.cache;
     } catch (error) {
       console.error('[LeagueService] Error fetching allowed leagues:', error);
-      return [];
+      this.cache = DEFAULT_ALLOWED_LEAGUES;
+      this.lastFetch = now;
+      return this.cache;
     }
   }
 

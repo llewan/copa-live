@@ -19,9 +19,33 @@ dotenv.config()
 
 const app: express.Application = express()
 
+let dbInitPromise: Promise<void> | null = null
+const shouldAutoInitDb = process.env.AUTO_INIT_DB === 'true' || process.env.VERCEL === '1'
+
+const ensureDbInitialized = async (): Promise<void> => {
+  if (!shouldAutoInitDb) return
+  if (!dbInitPromise) {
+    dbInitPromise = createTables().catch((err) => {
+      dbInitPromise = null
+      throw err
+    })
+  }
+  await dbInitPromise
+}
+
 app.use(cors())
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
+
+app.use(async (_req: Request, _res: Response, next: NextFunction) => {
+  if (!shouldAutoInitDb) return next()
+  try {
+    await ensureDbInitialized()
+  } catch (error) {
+    console.error('[DB Init] Auto-init failed:', error)
+  }
+  next()
+})
 
 /**
  * API Routes

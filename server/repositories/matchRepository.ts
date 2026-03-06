@@ -12,7 +12,7 @@ export const matchRepository = {
     const isAllowed = await leagueService.isLeagueAllowed(match.competition.id, match.provider || 'football-data');
     
     if (!isAllowed) {
-        // console.warn(`[MatchRepository] Blocked upsert for match ${match.id} (League ID: ${match.competition.id} not allowed)`);
+        console.warn(`[MatchRepository] Blocked upsert for match ${match.id} (provider=${match.provider || 'football-data'}, leagueId=${match.competition.id})`);
         return;
     }
 

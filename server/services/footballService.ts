@@ -164,19 +164,7 @@ export class FootballService {
           if (matches.length > 0) {
               console.log(`[FootballService] Received ${matches.length} matches for today. Updating DB...`);
               for (const m of matches) {
-                  // Update detailed status including events and stats
-                  await matchRepository.updateMatchStatus(
-                      m.id,
-                      m.status,
-                      m.minute,
-                      m.score.fullTime.home,
-                      m.score.fullTime.away,
-                      m.events,
-                      m.venue,
-                      m.statistics
-                  );
-                  // Also upsert to ensure provider and other metadata are correct
-                   await matchRepository.upsertMatch({ ...m, provider: 'api-football' });
+                  await matchRepository.upsertMatch({ ...m, provider: 'api-football' });
               }
           } else {
               console.log('[FootballService] No matches returned for today.');

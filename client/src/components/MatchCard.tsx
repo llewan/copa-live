@@ -56,13 +56,29 @@ export const MatchCard = ({ match }: MatchCardProps) => {
 
   // Helper to extract goals for a team
   const getGoals = (teamName: string) => {
-    if (!match.events) return [];
-    return match.events
-      .filter((e: MatchEvent) => e.type === 'GOAL' && e.team.name === teamName)
+    if (!match.events) {
+        return [];
+    }
+    
+    // Normalize: lowercase, remove special chars, trim
+    const normalize = (s: string) => s?.toLowerCase().replace(/[^a-z0-9]/g, '').trim() || '';
+    const target = normalize(teamName);
+    
+    const goals = match.events
+      .filter((e: MatchEvent) => {
+        if (e.type !== 'GOAL') return false;
+        
+        const eventTeam = normalize(e.team.name);
+        
+        // Exact match or partial match (if one contains the other)
+        return eventTeam === target || eventTeam.includes(target) || target.includes(eventTeam);
+      })
       .map((e: MatchEvent) => ({ 
         name: e.player?.name?.split(' ').pop() || e.player?.name || '', 
         minute: e.minute 
       }));
+
+    return goals;
   };
 
   const homeGoals = (isLive || match.status === 'FINISHED') ? getGoals(match.homeTeam.name) : [];

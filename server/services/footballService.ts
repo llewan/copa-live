@@ -157,25 +157,86 @@ export class FootballService {
       
       try {
           // Fetch all matches for today from API-Football
-          // This includes Live, Finished, Scheduled - everything for today.
-          // This is "one API call" to refresh the whole day.
           const matches = await this.apiFootball.getMatches(today);
           
           if (matches.length > 0) {
-              console.log(`[FootballService] Received ${matches.length} matches for today. Updating DB...`);
+              // 1. Fetch current DB state to preserve event data if API returns bad data
+              const dbMatches = await matchRepository.getMatchesByDate(today);
+              const dbMatchMap = new Map(dbMatches.map(m => [m.id, m]));
+
+              const matchesWithEvents = matches.filter(m => m.events && m.events.length > 0).length;
+              console.log(`[FootballService] Received ${matches.length} matches for today. (Matches with events: ${matchesWithEvents}). Updating DB...`);
+              
               for (const m of matches) {
-                  // For FINISHED matches, the API response might include events if we use the right endpoint or include params.
-                  // However, getFixturesByDate usually returns summary.
-                  // If we want events for finished matches to appear in dashboard without clicking detail,
-                  // we might need to fetch details for them if they are missing events.
-                  // BUT: Doing N requests for N finished matches is expensive.
-                  
-                  // OPTIMIZATION: 
-                  // The API-Football /fixtures endpoint DOES return events if we ask for them or if they are included.
-                  // Check adapter.ts -> getMatches -> getFixturesByDate.
-                  
-                  await matchRepository.upsertMatch({ ...m, provider: 'api-football' });
+                  const dbMatch = dbMatchMap.get(m.id);
+                  const matchToSave = { ...m, provider: 'api-football' };
+
+                  // Logic to preserve good events from DB if API sends bad ones
+                  if (m.events && m.events.length > 0) {
+                       // Check if API events have missing names
+                       const hasBadEvents = m.events.some(e => e.type === 'GOAL' && !e.player.name);
+                       
+                       if (hasBadEvents && dbMatch && dbMatch.events && dbMatch.events.length > 0) {
+                           const dbHasGoodEvents = dbMatch.events.some(e => e.type === 'GOAL' && e.player.name);
+                           
+                           if (dbHasGoodEvents) {
+                               // API has bad events, DB has good events.
+                               // Only overwrite if score changed (implies new events we must capture, even if bad)
+                               const scoreChanged = (m.score.fullTime.home !== dbMatch.score.fullTime.home) || 
+                                                    (m.score.fullTime.away !== dbMatch.score.fullTime.away);
+                                                    
+                               if (!scoreChanged) {
+                                   // Score same, prefer DB events with names
+                                   matchToSave.events = dbMatch.events;
+                               }
+                           }
+                       }
+                  }
+
+                  // @ts-expect-error - upsertMatch types might mismatch with raw API object but it works
+                  await matchRepository.upsertMatch(matchToSave);
               }
+
+              // 2. Enrichment: Check for matches that need detailed data (scorers)
+              const matchesNeedingDetails = matches.filter(m => {
+                  const totalGoals = (m.score.fullTime.home || 0) + (m.score.fullTime.away || 0);
+                  if (totalGoals === 0) return false;
+                  
+                  if (!['IN_PLAY', 'PAUSED', 'HALFTIME', 'LIVE', '1H', '2H', 'ET', 'P', 'BT', 'FINISHED'].includes(m.status)) return false;
+
+                  // If API returns empty events but score > 0, we need details.
+                  if (!m.events || m.events.length === 0) return true;
+                  
+                  // If API returns events with missing names
+                  const hasBadGoal = m.events.some(e => e.type === 'GOAL' && !e.player.name);
+                  return hasBadGoal;
+              });
+
+              if (matchesNeedingDetails.length > 0) {
+                  console.log(`[FootballService] Found ${matchesNeedingDetails.length} matches needing scorer details.`);
+                  // Limit to 3 to protect rate limit (runs every 15 mins)
+                  const queue = matchesNeedingDetails.slice(0, 3);
+                  
+                  for (const m of queue) {
+                      console.log(`[FootballService] Enriching match ${m.id} to get scorers...`);
+                      try {
+                          const details = await this.apiFootball.getMatchDetails(m.id);
+                          await matchRepository.updateMatchStatus(
+                            details.id,
+                            details.status,
+                            details.minute,
+                            details.score.fullTime.home,
+                            details.score.fullTime.away,
+                            details.events,
+                            details.venue,
+                            details.statistics
+                          );
+                      } catch (e) {
+                          console.error(`[FootballService] Failed to enrich match ${m.id}`, e);
+                      }
+                  }
+              }
+
           } else {
               console.log('[FootballService] No matches returned for today.');
           }

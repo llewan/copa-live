@@ -85,6 +85,7 @@ export const Dashboard = () => {
     } finally {
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate]); // matches length is checked via closure but that's fine for initial load check
 
   // Smart Polling Logic
@@ -130,7 +131,7 @@ export const Dashboard = () => {
       const followedTeamNames = preferences.followedTeams.flatMap(id => {
         // loose equality to handle string/number mismatch
         const team = TEAMS.find(t => t.id.toString() === id.toString());
-        return team ? [team.name, team.shortName] : [];
+        return team ? [team.name, team.shortName, ...(team.aliases || [])] : [];
       });
 
       filteredMatches = matches.filter(match => {

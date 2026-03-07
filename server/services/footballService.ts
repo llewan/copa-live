@@ -106,16 +106,16 @@ export class FootballService {
     }
   }
 
-  async syncUpcomingSchedule(startDate: string) {
-      // Sync next 7 days using API-Football
+  async syncUpcomingSchedule(startDate: string, daysToSync: number = 7) {
+      // Sync next N days using API-Football
       const addDays = (d: string, days: number) => {
           const date = new Date(d);
           date.setDate(date.getDate() + days);
           return date.toISOString().split('T')[0];
       };
-      const toDate = addDays(startDate, 7);
+      const toDate = addDays(startDate, daysToSync);
       
-      console.log(`[FootballService] Syncing schedule from ${startDate} to ${toDate} using API-Football...`);
+      console.log(`[FootballService] Syncing schedule from ${startDate} to ${toDate} (${daysToSync} days) using API-Football...`);
       
       await this.configureAdapter();
 
@@ -134,12 +134,12 @@ export class FootballService {
           }
 
           // Mark days as synced
-          const curr = new Date(startDate);
-          const end = new Date(toDate);
-          while (curr <= end) {
-              const d = curr.toISOString().split('T')[0];
-              await syncStatusRepository.markAsSynced(d);
-              curr.setDate(curr.getDate() + 1);
+          // Re-calculate date loop because we modified 'curr' in place or need fresh loop
+          const syncStart = new Date(startDate);
+          const syncEnd = new Date(toDate);
+          for (let d = new Date(syncStart); d <= syncEnd; d.setDate(d.getDate() + 1)) {
+              const dateStr = d.toISOString().split('T')[0];
+              await syncStatusRepository.markAsSynced(dateStr);
           }
 
           console.log(`[FootballService] Synced schedule successfully.`);
@@ -164,6 +164,16 @@ export class FootballService {
           if (matches.length > 0) {
               console.log(`[FootballService] Received ${matches.length} matches for today. Updating DB...`);
               for (const m of matches) {
+                  // For FINISHED matches, the API response might include events if we use the right endpoint or include params.
+                  // However, getFixturesByDate usually returns summary.
+                  // If we want events for finished matches to appear in dashboard without clicking detail,
+                  // we might need to fetch details for them if they are missing events.
+                  // BUT: Doing N requests for N finished matches is expensive.
+                  
+                  // OPTIMIZATION: 
+                  // The API-Football /fixtures endpoint DOES return events if we ask for them or if they are included.
+                  // Check adapter.ts -> getMatches -> getFixturesByDate.
+                  
                   await matchRepository.upsertMatch({ ...m, provider: 'api-football' });
               }
           } else {

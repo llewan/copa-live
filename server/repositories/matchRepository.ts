@@ -76,6 +76,23 @@ export const matchRepository = {
         await pool.query(query, params);
 
         // Handle events
+        // If events array is provided (even if empty), we should sync it.
+        // However, if it's undefined, we might skip to preserve existing events?
+        // No, upsertMatch usually implies "replace state".
+        // But for list view sync, events might be empty array if API doesn't return them.
+        // If we overwrite with empty array, we lose detail-fetched events!
+        
+        // CRITICAL FIX: Only overwrite events if the incoming match HAS events.
+        // If incoming match has 0 events, it might be a summary fetch.
+        // But what if a match genuinely has 0 events?
+        // Strategy: 
+        // 1. If match.events is present and > 0, overwrite.
+        // 2. If match.events is empty, only overwrite if we are sure it's a detail fetch? 
+        //    Hard to know here.
+        // Better Strategy for Dashboard:
+        // The /fixtures endpoint DOES return events. If it returns [], it means no events or not started.
+        // If we blindly delete, we are fine as long as the source is reliable.
+        
         if (match.events && match.events.length > 0) {
             // Delete old events
             await pool.query('DELETE FROM events WHERE match_id = $1', [match.id]);
@@ -94,6 +111,11 @@ export const matchRepository = {
                 ]);
             }
         }
+        // NOTE: If match.events is empty, we do NOT delete existing events.
+        // This protects us from "summary" updates wiping out "detailed" events.
+        // However, if a match was corrected to have NO events, this logic prevents that correction.
+        // Given the use case (Dashboard summary vs Detail), preserving is safer.
+        
     } catch (e) {
         console.error('Error upserting match:', e);
     }

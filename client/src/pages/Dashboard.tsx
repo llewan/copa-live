@@ -205,39 +205,53 @@ export const Dashboard = () => {
             </div>
 
             {/* Date Selector */}
-            <div className="flex items-center justify-between bg-white p-2 rounded-lg border border-gray-200 mb-2 shadow-sm">
+            <div className="flex items-center justify-between bg-white/80 backdrop-blur-sm p-1.5 rounded-xl border border-gray-200/60 mb-2 shadow-sm sticky top-[70px] z-30">
               <button 
                  onClick={() => {
-                     // Simple implementation: just shift selected date by -1 day
-                     // For a real scrollable calendar, we'd shift the window of days
                      const prev = addDays(new Date(selectedDate), -1);
                      setSelectedDate(format(prev, 'yyyy-MM-dd'));
                  }}
-                 className="p-2 hover:bg-gray-100 rounded-full text-gray-600 transition-colors"
+                 className="p-2 hover:bg-gray-100/80 rounded-full text-gray-500 hover:text-black transition-all active:scale-95"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
               
               <div 
-                className="flex gap-2 overflow-x-auto no-scrollbar flex-1 justify-center px-4"
+                className="flex gap-1.5 overflow-x-auto no-scrollbar flex-1 justify-center px-2 py-1"
                 key={selectedDate} // Force re-render for animation
               >
                 {days.map((d, i) => {
-                  const isActive = d.fullDate === selectedDate;
+                  const isSelected = d.fullDate === selectedDate;
+                  const isToday = d.isToday;
+                  
                   return (
                     <div 
                       key={i} 
                       onClick={() => handleDateSelect(d.fullDate)}
-                      className={`flex flex-col items-center justify-center px-4 py-2 rounded-lg cursor-pointer min-w-[80px] transition-colors ${
-                        isActive 
-                          ? 'bg-gray-100' 
-                          : 'hover:bg-gray-50'
+                      className={`flex flex-col items-center justify-center px-3 py-2 rounded-lg cursor-pointer min-w-[72px] transition-all duration-200 border ${
+                        isSelected 
+                          ? 'bg-black border-black shadow-md transform scale-105' 
+                          : isToday
+                            ? 'bg-blue-50 border-blue-100 hover:bg-blue-100'
+                            : 'bg-transparent border-transparent hover:bg-gray-50'
                       }`}
                     >
-                      <span className={`text-[10px] font-bold tracking-wider mb-0.5 ${isActive ? 'text-black' : 'text-gray-500'}`}>
+                      <span className={`text-[10px] font-bold tracking-wider mb-0.5 uppercase ${
+                        isSelected 
+                          ? 'text-white/90' 
+                          : isToday 
+                            ? 'text-blue-600' 
+                            : 'text-gray-400'
+                      }`}>
                         {d.day}
                       </span>
-                      <span className={`text-xs ${isActive ? 'font-bold text-black' : 'text-gray-400'}`}>
+                      <span className={`text-xs font-medium ${
+                        isSelected 
+                          ? 'text-white' 
+                          : isToday 
+                            ? 'text-blue-700 font-bold' 
+                            : 'text-gray-700'
+                      }`}>
                         {d.date}
                       </span>
                     </div>
@@ -250,26 +264,32 @@ export const Dashboard = () => {
                      const next = addDays(new Date(selectedDate), 1);
                      setSelectedDate(format(next, 'yyyy-MM-dd'));
                  }}
-                 className="p-2 hover:bg-gray-100 rounded-full text-gray-600 transition-colors"
+                 className="p-2 hover:bg-gray-100/80 rounded-full text-gray-500 hover:text-black transition-all active:scale-95"
               >
                 <ChevronRight className="w-5 h-5" />
               </button>
               
-              <div className="border-l border-gray-200 pl-2 ml-2 relative" ref={calendarRef}>
+              <div className="border-l border-gray-200 pl-1 ml-1 relative" ref={calendarRef}>
                  <button 
                    onClick={() => setShowCalendar(!showCalendar)}
-                   className={`p-2 rounded text-gray-600 transition-colors ${showCalendar ? 'bg-gray-100 text-black' : 'hover:bg-gray-100'}`}
+                   className={`p-2 rounded-lg transition-colors ${
+                     showCalendar 
+                       ? 'bg-gray-100 text-black' 
+                       : 'text-gray-500 hover:bg-gray-50 hover:text-black'
+                   }`}
                  >
                    <CalendarIcon className="w-5 h-5" />
                  </button>
                  
                  {showCalendar && (
-                    <div className="absolute top-full right-0 mt-2 z-50">
-                        <Calendar 
-                            selectedDate={selectedDate}
-                            onSelect={handleDateSelect}
-                            onClose={() => setShowCalendar(false)}
-                        />
+                    <div className="absolute top-full right-0 mt-2 z-50 animate-in fade-in zoom-in-95 duration-200">
+                        <div className="bg-white rounded-xl shadow-xl border border-gray-100 p-1">
+                          <Calendar 
+                              selectedDate={selectedDate}
+                              onSelect={handleDateSelect}
+                              onClose={() => setShowCalendar(false)}
+                          />
+                        </div>
                     </div>
                  )}
               </div>
@@ -339,18 +359,41 @@ export const Dashboard = () => {
                    <p className="text-gray-500 text-lg">No hay partidos programados para esta fecha.</p>
                  </div>
               ) : (
-                Object.entries(groupedMatches).map(([league, leagueMatches]) => (
-                    <div key={league} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-                    <div className="bg-gray-50/50 px-4 py-3 border-b border-gray-200">
-                        <h2 className="font-bold text-black text-lg">{league}</h2>
-                    </div>
-                    <div className="divide-y divide-gray-100">
-                        {leagueMatches.map((match) => (
-                        <MatchCard key={match.id} match={match} />
-                        ))}
-                    </div>
-                    </div>
-                ))
+                Object.entries(groupedMatches).map(([league, leagueMatches]) => {
+                    const firstMatch = leagueMatches[0];
+                    const leagueEmblem = firstMatch?.competition?.emblem;
+                    // const country = firstMatch?.competition?.name; // Often API provides Country but we might not have it in match root
+
+                    return (
+                        <div key={league} className="bg-white rounded-xl border border-gray-200/80 shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden">
+                            <div className="bg-gradient-to-r from-gray-50 to-white px-5 py-3 border-b border-gray-100 flex items-center gap-3">
+                                {leagueEmblem ? (
+                                    <img 
+                                        src={leagueEmblem} 
+                                        alt={league} 
+                                        className="w-8 h-8 object-contain drop-shadow-sm"
+                                        onError={(e) => {
+                                            (e.target as HTMLImageElement).style.display = 'none';
+                                        }}
+                                    />
+                                ) : (
+                                    <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-xs font-bold text-gray-500">
+                                        {league.substring(0, 2)}
+                                    </div>
+                                )}
+                                <div className="flex flex-col">
+                                    <h2 className="font-bold text-gray-900 text-lg leading-tight tracking-tight">{league}</h2>
+                                    {/* Optional: Add country name here if available in data */}
+                                </div>
+                            </div>
+                            <div className="divide-y divide-gray-100/80">
+                                {leagueMatches.map((match) => (
+                                <MatchCard key={match.id} match={match} />
+                                ))}
+                            </div>
+                        </div>
+                    );
+                })
               )}
             </div>
           )}

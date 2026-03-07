@@ -10,6 +10,11 @@
     "preview": "vite preview",
     "check": "tsc --noEmit",
     "server:dev": "nodemon",
+    "db:investigate": "tsx scripts/investigate-db.ts",
+    "db:sync": "tsx scripts/manual-sync.ts",
+    "db:seed": "tsx scripts/seed-leagues.ts",
+    "api:next": "tsx scripts/fetch-next-games.ts",
+    "db:persist-10": "tsx scripts/persist-next-10-days.ts",
     "dev": "concurrently \"npm run client:dev\" \"npm run server:dev\"",
     "test": "echo \"No tests to run\"",
     "prepare": "husky"

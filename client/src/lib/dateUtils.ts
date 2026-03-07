@@ -1,4 +1,4 @@
-import { format, addDays, parseISO, differenceInMinutes, isToday } from 'date-fns';
+import { format, parseISO, differenceInMinutes, isToday } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 import { es, enUS, fr, Locale } from 'date-fns/locale';
 
@@ -64,14 +64,21 @@ export const generateCalendarDays = (centerDateStr?: string, lang: string = 'es'
   }
 
   const locale = getLocale(lang);
+  const today = new Date();
+  const todayStr = format(today, 'yyyy-MM-dd');
 
-  for (let i = -3; i < 4; i++) {
-    const date = addDays(centerDate, i);
+  for (let i = -3; i <= 3; i++) {
+    const date = new Date(centerDate);
+    date.setDate(centerDate.getDate() + i);
+    
+    const fullDate = format(date, 'yyyy-MM-dd');
+    const isDateToday = fullDate === todayStr;
+
     days.push({
-      day: format(date, 'EEE', { locale }).toUpperCase().replace('.', ''),
+      day: isDateToday ? (lang === 'en' ? 'TODAY' : 'HOY') : format(date, 'EEE', { locale }).toUpperCase().replace('.', ''),
       date: format(date, 'd MMM', { locale }).toUpperCase().replace('.', ''),
-      fullDate: format(date, 'yyyy-MM-dd'),
-      isToday: false, 
+      fullDate,
+      isToday: isDateToday, 
     });
   }
   

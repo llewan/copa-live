@@ -5,7 +5,7 @@ import { logEvent } from '@/lib/analytics';
 import { TeamLogo } from './TeamLogo';
 import { formatToLocal, getRemainingTime } from '@/lib/dateUtils';
 import { getStadiumForTeam } from '@/lib/stadiums';
-import { Trophy, MapPin } from 'lucide-react';
+import { MapPin } from 'lucide-react';
 import { Match, MatchEvent } from '@/types';
 import { TFunction } from 'i18next';
 
@@ -70,56 +70,67 @@ export const MatchCard = ({ match }: MatchCardProps) => {
 
   return (
     <div 
-      className="bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-md hover:border-gray-200 transition-all duration-300 py-5 px-5 cursor-pointer group transform hover:-translate-y-0.5 relative overflow-hidden"
+      className="bg-white hover:bg-gray-50/80 transition-all duration-200 py-4 px-5 cursor-pointer group relative overflow-hidden"
       onClick={handleClick}
     >
       {/* Status Stripe */}
-      <div className={`absolute top-0 left-0 w-1 h-full ${
-          isLive ? 'bg-red-500 animate-pulse' : 
+      <div className={`absolute top-0 left-0 w-0.5 h-full transition-all duration-300 ${
+          isLive ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]' : 
           match.status === 'FINISHED' ? 'bg-gray-300' : 
           'bg-blue-500'
       }`}></div>
 
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-5 pl-2">
-        <div className="flex items-center gap-6 md:gap-10 flex-1">
-          {/* Time Column */}
-          <div className="w-20 flex-shrink-0 flex flex-col items-center md:items-start">
-            <span className="text-base font-bold text-gray-900 tracking-tight">{formattedTime}</span>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pl-3">
+        {/* Main Content Area */}
+        <div className="flex items-center gap-6 md:gap-8 flex-1">
+          
+          {/* Time & Status Column */}
+          <div className="w-16 flex-shrink-0 flex flex-col items-center justify-center">
             {isLive ? (
-               <span className="inline-flex items-center gap-1.5 mt-1 px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-[10px] font-bold uppercase tracking-wider border border-red-100 animate-pulse">
-                 <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-ping"></span>
-                 {t('match.status.live')} {match.minute ? `${match.minute}'` : ''}
-               </span>
+               <div className="flex flex-col items-center">
+                   <span className="text-red-600 font-bold text-sm animate-pulse mb-1">
+                     {match.minute ? `${match.minute}'` : 'LIVE'}
+                   </span>
+                   <span className="inline-block w-2 h-2 rounded-full bg-red-600 animate-ping"></span>
+               </div>
             ) : match.status === 'FINISHED' ? (
-               <span className="block text-[11px] text-gray-500 font-bold mt-1 bg-gray-100 px-2 py-0.5 rounded-full">
-                 {t('match.status.finished')}
-               </span>
-            ) : remainingTime && (
-                <span className="block text-[10px] text-blue-600 font-bold mt-1 bg-blue-50 px-2 py-0.5 rounded-full">
-                    {remainingTime.type === 'STARTING_SOON' 
-                      ? t('time.starting_soon')
-                      : remainingTime.hours && remainingTime.hours > 0
-                        ? `${remainingTime.hours}h ${remainingTime.minutes}m`
-                        : `${remainingTime.minutes}m`
-                    }
-                </span>
+               <div className="flex flex-col items-center">
+                   <span className="text-gray-900 font-bold text-sm tracking-tight">FT</span>
+                   <span className="text-[10px] text-gray-400 font-medium mt-0.5">{formattedTime}</span>
+               </div>
+            ) : (
+                <div className="flex flex-col items-center">
+                    <span className="text-gray-900 font-bold text-base tracking-tight">{formattedTime}</span>
+                    {remainingTime && (
+                        <span className="text-[10px] text-blue-600 font-medium mt-0.5 bg-blue-50 px-1.5 py-0.5 rounded-full">
+                            {remainingTime.type === 'STARTING_SOON' 
+                              ? t('time.starting_soon')
+                              : remainingTime.hours && remainingTime.hours > 0
+                                ? `${remainingTime.hours}h`
+                                : `${remainingTime.minutes}m`
+                            }
+                        </span>
+                    )}
+                </div>
             )}
           </div>
 
-          {/* Teams Column */}
-          <div className="flex flex-col gap-3 min-w-[220px] flex-1">
-            <div className="flex items-start justify-between group/team">
-              <div className="flex items-start gap-3 transition-transform group-hover/team:translate-x-1 duration-200">
-                <TeamLogo src={match.homeTeam.crest} alt={match.homeTeam.name} className="w-7 h-7 object-contain drop-shadow-sm mt-0.5" />
+          {/* Teams Scoreboard Column */}
+          <div className="flex flex-col gap-3 flex-1 min-w-[200px]">
+            {/* Home Team */}
+            <div className="flex items-center justify-between group/team">
+              <div className="flex items-center gap-3 transition-transform group-hover/team:translate-x-1 duration-200">
+                <TeamLogo src={match.homeTeam.crest} alt={match.homeTeam.name} className="w-6 h-6 object-contain drop-shadow-sm" />
                 <div className="flex flex-col">
-                  <span className={`text-base font-semibold ${match.score.fullTime.home > match.score.fullTime.away && match.status === 'FINISHED' ? 'text-gray-900' : 'text-gray-700'}`}>
+                  <span className={`text-[15px] font-semibold leading-none ${match.score.fullTime.home > match.score.fullTime.away && match.status === 'FINISHED' ? 'text-gray-900' : 'text-gray-600'}`}>
                       {match.homeTeam.name}
                   </span>
                   {homeGoals.length > 0 && (
-                    <div className="text-[10px] text-gray-500 font-medium leading-tight mt-0.5 max-w-[200px]">
+                    <div className="text-[10px] text-gray-400 font-medium leading-tight mt-1 flex flex-wrap gap-x-2">
                       {homeGoals.map((g: { name: string; minute: number }, i: number) => (
-                        <span key={i} className="inline-block mr-1.5">
-                          {g.name} <span className="text-gray-400">{g.minute}'</span>{i < homeGoals.length - 1 ? ',' : ''}
+                        <span key={i} className="flex items-center">
+                          <span className="w-1 h-1 rounded-full bg-gray-300 mr-1"></span>
+                          {g.name} <span className="text-gray-300 ml-0.5">{g.minute}'</span>
                         </span>
                       ))}
                     </div>
@@ -127,23 +138,26 @@ export const MatchCard = ({ match }: MatchCardProps) => {
                 </div>
               </div>
               {(isLive || match.status === 'FINISHED') && (
-                <span className={`text-lg font-bold w-8 text-center ${match.score.fullTime.home > match.score.fullTime.away ? 'text-gray-900' : 'text-gray-500'}`}>
+                <span className={`text-lg font-bold w-8 text-center tabular-nums ${match.score.fullTime.home > match.score.fullTime.away ? 'text-gray-900' : 'text-gray-400'}`}>
                     {match.score.fullTime.home ?? 0}
                 </span>
               )}
             </div>
-            <div className="flex items-start justify-between group/team">
-              <div className="flex items-start gap-3 transition-transform group-hover/team:translate-x-1 duration-200">
-                <TeamLogo src={match.awayTeam.crest} alt={match.awayTeam.name} className="w-7 h-7 object-contain drop-shadow-sm mt-0.5" />
+
+            {/* Away Team */}
+            <div className="flex items-center justify-between group/team">
+              <div className="flex items-center gap-3 transition-transform group-hover/team:translate-x-1 duration-200">
+                <TeamLogo src={match.awayTeam.crest} alt={match.awayTeam.name} className="w-6 h-6 object-contain drop-shadow-sm" />
                 <div className="flex flex-col">
-                  <span className={`text-base font-semibold ${match.score.fullTime.away > match.score.fullTime.home && match.status === 'FINISHED' ? 'text-gray-900' : 'text-gray-700'}`}>
+                  <span className={`text-[15px] font-semibold leading-none ${match.score.fullTime.away > match.score.fullTime.home && match.status === 'FINISHED' ? 'text-gray-900' : 'text-gray-600'}`}>
                       {match.awayTeam.name}
                   </span>
                   {awayGoals.length > 0 && (
-                    <div className="text-[10px] text-gray-500 font-medium leading-tight mt-0.5 max-w-[200px]">
+                    <div className="text-[10px] text-gray-400 font-medium leading-tight mt-1 flex flex-wrap gap-x-2">
                       {awayGoals.map((g: { name: string; minute: number }, i: number) => (
-                        <span key={i} className="inline-block mr-1.5">
-                          {g.name} <span className="text-gray-400">{g.minute}'</span>{i < awayGoals.length - 1 ? ',' : ''}
+                        <span key={i} className="flex items-center">
+                          <span className="w-1 h-1 rounded-full bg-gray-300 mr-1"></span>
+                          {g.name} <span className="text-gray-300 ml-0.5">{g.minute}'</span>
                         </span>
                       ))}
                     </div>
@@ -151,7 +165,7 @@ export const MatchCard = ({ match }: MatchCardProps) => {
                 </div>
               </div>
               {(isLive || match.status === 'FINISHED') && (
-                <span className={`text-lg font-bold w-8 text-center ${match.score.fullTime.away > match.score.fullTime.home ? 'text-gray-900' : 'text-gray-500'}`}>
+                <span className={`text-lg font-bold w-8 text-center tabular-nums ${match.score.fullTime.away > match.score.fullTime.home ? 'text-gray-900' : 'text-gray-400'}`}>
                     {match.score.fullTime.away ?? 0}
                 </span>
               )}
@@ -159,21 +173,24 @@ export const MatchCard = ({ match }: MatchCardProps) => {
           </div>
         </div>
 
-        {/* Info Column: Stage & Venue */}
-        <div className="flex flex-row md:flex-col items-center md:items-end gap-3 md:gap-1.5 pl-6 md:pl-0 border-t md:border-t-0 border-gray-50 pt-3 md:pt-0 mt-1 md:mt-0">
+        {/* Info Column: Stage & Venue (Desktop: Right, Mobile: Bottom) */}
+        <div className="flex flex-row md:flex-col items-center md:items-end gap-3 md:gap-1 pl-12 md:pl-0 border-t md:border-t-0 border-gray-50 pt-2 md:pt-0 mt-1 md:mt-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
           {stageLabel && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-50 text-gray-600 border border-gray-100 group-hover:bg-indigo-50 group-hover:text-indigo-600 group-hover:border-indigo-100 transition-colors">
-              <Trophy className="w-3 h-3" />
-              <span className="text-[10px] font-bold uppercase tracking-wide">{stageLabel}</span>
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded text-gray-400">
+              <span className="text-[10px] font-medium uppercase tracking-wider">{stageLabel}</span>
             </div>
           )}
           
           {venue && (
-            <div className="flex items-center gap-1.5 text-gray-400 group-hover:text-gray-600 transition-colors">
+            <div className="hidden md:flex items-center gap-1 text-gray-300">
               <MapPin className="w-3 h-3" />
-              <span className="text-[11px] font-medium">{venue}</span>
+              <span className="text-[10px]">{venue}</span>
             </div>
           )}
+          
+          <div className="md:hidden flex-1 text-right">
+             <span className="text-[10px] text-blue-500 font-medium">Ver detalles &rarr;</span>
+          </div>
         </div>
       </div>
     </div>

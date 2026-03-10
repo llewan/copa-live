@@ -19,7 +19,15 @@ export const UpcomingMatches = () => {
   useEffect(() => {
     const fetchUpcoming = async () => {
       console.log('Fetching upcoming matches. Followed teams:', preferences.followedTeams);
-      if (preferences.followedTeams.length === 0) return;
+      // We removed the early return if followedTeams is empty to ensure we can debug or show empty state if needed,
+      // but the logic below relies on teamNames being present.
+      // Actually, if followedTeams is empty, we shouldn't fetch, but we should update state to stop loading.
+      
+      if (preferences.followedTeams.length === 0) {
+          setLoading(false);
+          setMatches([]);
+          return;
+      }
 
       // Get team names/aliases from preferences
       const teamNames = preferences.followedTeams.flatMap(id => {
@@ -28,7 +36,11 @@ export const UpcomingMatches = () => {
       }).filter(Boolean) as string[];
 
       console.log('Team names to fetch:', teamNames);
-      if (teamNames.length === 0) return;
+      if (teamNames.length === 0) {
+          setLoading(false);
+          setMatches([]);
+          return;
+      }
 
       setLoading(true);
       try {
@@ -45,72 +57,15 @@ export const UpcomingMatches = () => {
     fetchUpcoming();
   }, [preferences.followedTeams]);
 
-  // Case 0: Not loaded or no user
-  // (Optional: can handle this if needed, but useEffect handles fetching)
+  const hasFollowedTeams = preferences.followedTeams.length > 0;
+  const hasMatches = matches.length > 0;
 
-  if (loading || (matches.length === 0 && preferences.followedTeams.length > 0)) {
-     return (
-        <div className="mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-           <div className="flex items-center justify-between mb-4 px-1">
-            <div>
-              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <span className="w-2 h-6 bg-gradient-to-b from-blue-500 to-purple-600 rounded-full"></span>
-                {t('dashboard.upcoming.title')}
-              </h2>
-              <p className="text-xs text-gray-500 mt-0.5 ml-4">{t('dashboard.upcoming.description')}</p>
-            </div>
-          </div>
-          {loading ? (
-              <div className="flex overflow-x-auto gap-4 pb-4 snap-x snap-mandatory no-scrollbar">
-                  {[...Array(4)].map((_, i) => (
-                    <div key={i} className="min-w-[280px] md:min-w-[300px] snap-center bg-white rounded-xl p-4 shadow-sm border border-gray-100 h-32 animate-pulse">
-                      <div className="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
-                      <div className="flex justify-between items-center">
-                        <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
-                        <div className="w-8 h-4 bg-gray-200 rounded"></div>
-                        <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-          ) : (
-             <div className="bg-gray-50 border border-gray-100 rounded-xl p-6 text-center">
-                <p className="text-sm text-gray-500">{t('dashboard.no_matches')}</p>
-             </div>
-          )}
-        </div>
-     );
-  }
+  useEffect(() => {
+    console.log('[UpcomingMatches] State:', { loading, hasFollowedTeams, hasMatches });
+  }, [loading, hasFollowedTeams, hasMatches]);
 
-  if (matches.length === 0) {
-    return (
-      <div className="mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-        <div className="flex items-center justify-between mb-4 px-1">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-              <span className="w-2 h-6 bg-gradient-to-b from-blue-500 to-purple-600 rounded-full"></span>
-              {t('dashboard.upcoming.title')}
-            </h2>
-            <p className="text-xs text-gray-500 mt-0.5 ml-4">{t('dashboard.upcoming.description')}</p>
-          </div>
-        </div>
-
-        <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-6 text-center">
-          <p className="text-sm text-gray-600 mb-2">{t('preferences.subtitle')}</p>
-          <button 
-            onClick={() => navigate('/preferences')}
-            className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-white px-4 py-2 rounded-full shadow-sm hover:shadow transition-all"
-          >
-            {t('nav.preferences')}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Case 3: Have Matches
   return (
-    <div className="mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="mb-8 w-full">
       <div className="flex items-center justify-between mb-4 px-1">
         <div>
           <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
@@ -121,12 +76,40 @@ export const UpcomingMatches = () => {
         </div>
       </div>
 
-      <div className="flex overflow-x-auto gap-4 pb-4 snap-x snap-mandatory no-scrollbar">
+      {loading ? (
+        <div className="flex overflow-x-auto gap-4 pb-4 snap-x snap-mandatory no-scrollbar w-full">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="min-w-[280px] md:min-w-[300px] snap-center bg-white rounded-xl p-4 shadow-sm border border-gray-100 h-32 animate-pulse shrink-0">
+              <div className="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
+              <div className="flex justify-between items-center">
+                <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
+                <div className="w-8 h-4 bg-gray-200 rounded"></div>
+                <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : !hasFollowedTeams ? (
+        <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-6 text-center">
+          <p className="text-sm text-gray-600 mb-2">{t('preferences.subtitle')}</p>
+          <button 
+            onClick={() => navigate('/preferences')}
+            className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-white px-4 py-2 rounded-full shadow-sm hover:shadow transition-all"
+          >
+            {t('nav.preferences')}
+          </button>
+        </div>
+      ) : !hasMatches ? (
+        <div className="bg-gray-50 border border-gray-100 rounded-xl p-6 text-center">
+          <p className="text-sm text-gray-500">{t('dashboard.no_matches')}</p>
+        </div>
+      ) : (
+        <div className="flex overflow-x-auto gap-4 pb-4 snap-x snap-mandatory no-scrollbar w-full">
           {matches.map((match) => (
             <div 
               key={match.id}
               onClick={() => navigate(`/match/${match.id}`)}
-              className="min-w-[280px] md:min-w-[300px] snap-center bg-white group hover:bg-gradient-to-br hover:from-blue-50 hover:to-purple-50 rounded-xl p-4 shadow-sm hover:shadow-md border border-gray-100 transition-all duration-300 cursor-pointer relative overflow-hidden"
+              className="min-w-[280px] md:min-w-[300px] snap-center bg-white group hover:bg-gradient-to-br hover:from-blue-50 hover:to-purple-50 rounded-xl p-4 shadow-sm hover:shadow-md border border-gray-100 transition-all duration-300 cursor-pointer relative overflow-hidden shrink-0"
             >
               {/* Decoration */}
               <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-blue-100/20 to-purple-100/20 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-150 duration-500"></div>
@@ -177,7 +160,8 @@ export const UpcomingMatches = () => {
               )}
             </div>
           ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

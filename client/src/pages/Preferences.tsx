@@ -63,6 +63,7 @@ const Preferences = () => {
 
   const premierLeagueTeams = TEAMS.filter(t => t.league === 'Premier League');
   const championsLeagueTeams = TEAMS.filter(t => t.league === 'Champions League');
+  const ligaProfesionalTeams = TEAMS.filter(t => t.league === 'Primera Division');
 
   const renderTeamGrid = (teams: typeof TEAMS) => (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
@@ -135,6 +136,17 @@ const Preferences = () => {
               {t('preferences.champions_league')}
             </h2>
             {renderTeamGrid(championsLeagueTeams)}
+          </div>
+
+          {/* Liga Profesional Section */}
+          <div className="p-8 border-b border-gray-200">
+            <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
+              <span className="bg-sky-100 text-sky-700 p-2 rounded-lg mr-3">
+                LPF
+              </span>
+              {t('preferences.liga_profesional')}
+            </h2>
+            {renderTeamGrid(ligaProfesionalTeams)}
           </div>
 
           {/* Other Settings */}

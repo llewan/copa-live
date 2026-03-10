@@ -23,4 +23,11 @@ export const TEAMS: TeamInfo[] = [
   { id: 98, name: 'AC Milan', shortName: 'Milan', code: 'ACM', league: 'Champions League', color: 'bg-red-700' },
   { id: 108, name: 'Inter', shortName: 'Inter', code: 'INT', league: 'Champions League', color: 'bg-blue-700', aliases: ['Internazionale'] },
   { id: 78, name: 'Atletico Madrid', shortName: 'Atleti', code: 'ATM', league: 'Champions League', color: 'bg-red-700', aliases: ['Atlético Madrid', 'Atlético'] },
+  // Argentine Primera División
+  { id: 2068, name: 'River Plate', shortName: 'River', code: 'RIV', league: 'Primera Division', color: 'bg-red-600', aliases: ['River'] },
+  { id: 2066, name: 'Boca Juniors', shortName: 'Boca', code: 'BOC', league: 'Primera Division', color: 'bg-blue-900', aliases: ['Boca'] },
+  { id: 2067, name: 'Racing Club', shortName: 'Racing', code: 'RAC', league: 'Primera Division', color: 'bg-sky-400', aliases: ['Racing'] },
+  { id: 2075, name: 'Independiente', shortName: 'Independiente', code: 'IND', league: 'Primera Division', color: 'bg-red-700', aliases: ['Independiente'] },
+  { id: 2073, name: 'San Lorenzo', shortName: 'San Lorenzo', code: 'SLO', league: 'Primera Division', color: 'bg-blue-800', aliases: ['San Lorenzo'] },
+  { id: 2063, name: 'Huracán', shortName: 'Huracán', code: 'HUR', league: 'Primera Division', color: 'bg-red-500', aliases: ['Huracan'] },
 ];

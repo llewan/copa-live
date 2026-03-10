@@ -53,6 +53,8 @@ export class TeamNameMatcher {
 
   private static normalize(name: string): string {
     const normalized = name.toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Strip accents/diacritics (e.g., Barça -> Barca)
       .replace(/fc|cf|football club|club|sc|sv/g, '') // Remove common club suffixes/prefixes
       .replace(/[^a-z0-9\s]/g, '') // Remove special chars (keep spaces)
       .trim()

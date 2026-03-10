@@ -45,13 +45,11 @@ export const UpcomingMatches = () => {
     fetchUpcoming();
   }, [preferences.followedTeams]);
 
-  if (matches.length === 0 && !loading) {
-    // If user has no followed teams or no upcoming matches, we can optionally show a placeholder or nothing.
-    // Given the user feedback, it seems they want to see the section even if empty, or maybe they just want to know WHY it's empty.
-    // Let's show a friendly "No upcoming matches" or "Follow teams" message.
-    
-    if (preferences.followedTeams.length === 0) {
-       return (
+  // Case 0: Not loaded or no user
+  // (Optional: can handle this if needed, but useEffect handles fetching)
+
+  if (loading || (matches.length === 0 && preferences.followedTeams.length > 0)) {
+     return (
         <div className="mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
            <div className="flex items-center justify-between mb-4 px-1">
             <div>
@@ -62,38 +60,55 @@ export const UpcomingMatches = () => {
               <p className="text-xs text-gray-500 mt-0.5 ml-4">{t('dashboard.upcoming.description')}</p>
             </div>
           </div>
-          <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-6 text-center">
-            <p className="text-sm text-gray-600 mb-2">{t('preferences.subtitle')}</p>
-            <button 
-              onClick={() => navigate('/preferences')}
-              className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-white px-4 py-2 rounded-full shadow-sm hover:shadow transition-all"
-            >
-              {t('nav.preferences')}
-            </button>
-          </div>
+          {loading ? (
+              <div className="flex overflow-x-auto gap-4 pb-4 snap-x snap-mandatory no-scrollbar">
+                  {[...Array(4)].map((_, i) => (
+                    <div key={i} className="min-w-[280px] md:min-w-[300px] snap-center bg-white rounded-xl p-4 shadow-sm border border-gray-100 h-32 animate-pulse">
+                      <div className="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
+                      <div className="flex justify-between items-center">
+                        <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
+                        <div className="w-8 h-4 bg-gray-200 rounded"></div>
+                        <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+          ) : (
+             <div className="bg-gray-50 border border-gray-100 rounded-xl p-6 text-center">
+                <p className="text-sm text-gray-500">{t('dashboard.no_matches')}</p>
+             </div>
+          )}
         </div>
-       );
-    }
-    
-    // Followed teams but no matches
+     );
+  }
+
+  if (matches.length === 0) {
     return (
-        <div className="mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-           <div className="flex items-center justify-between mb-4 px-1">
-            <div>
-              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <span className="w-2 h-6 bg-gradient-to-b from-blue-500 to-purple-600 rounded-full"></span>
-                {t('dashboard.upcoming.title')}
-              </h2>
-              <p className="text-xs text-gray-500 mt-0.5 ml-4">{t('dashboard.upcoming.description')}</p>
-            </div>
-          </div>
-          <div className="bg-gray-50 border border-gray-100 rounded-xl p-6 text-center">
-            <p className="text-sm text-gray-500">{t('dashboard.no_matches')}</p>
+      <div className="mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="flex items-center justify-between mb-4 px-1">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <span className="w-2 h-6 bg-gradient-to-b from-blue-500 to-purple-600 rounded-full"></span>
+              {t('dashboard.upcoming.title')}
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5 ml-4">{t('dashboard.upcoming.description')}</p>
           </div>
         </div>
+
+        <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-6 text-center">
+          <p className="text-sm text-gray-600 mb-2">{t('preferences.subtitle')}</p>
+          <button 
+            onClick={() => navigate('/preferences')}
+            className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-white px-4 py-2 rounded-full shadow-sm hover:shadow transition-all"
+          >
+            {t('nav.preferences')}
+          </button>
+        </div>
+      </div>
     );
   }
 
+  // Case 3: Have Matches
   return (
     <div className="mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="flex items-center justify-between mb-4 px-1">
@@ -107,20 +122,7 @@ export const UpcomingMatches = () => {
       </div>
 
       <div className="flex overflow-x-auto gap-4 pb-4 snap-x snap-mandatory no-scrollbar">
-        {loading ? (
-          // Skeleton loading
-          [...Array(4)].map((_, i) => (
-            <div key={i} className="min-w-[280px] md:min-w-[300px] snap-center bg-white rounded-xl p-4 shadow-sm border border-gray-100 h-32 animate-pulse">
-              <div className="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
-              <div className="flex justify-between items-center">
-                <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
-                <div className="w-8 h-4 bg-gray-200 rounded"></div>
-                <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
-              </div>
-            </div>
-          ))
-        ) : (
-          matches.map((match) => (
+          {matches.map((match) => (
             <div 
               key={match.id}
               onClick={() => navigate(`/match/${match.id}`)}
@@ -174,8 +176,7 @@ export const UpcomingMatches = () => {
                 </div>
               )}
             </div>
-          ))
-        )}
+          ))}
       </div>
     </div>
   );

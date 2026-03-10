@@ -294,7 +294,7 @@ export class FootballService {
       }
   }
 
-  async getUpcomingMatches(teamNames?: string[]): Promise<Match[]> {
+  async getUpcomingMatches(teamNames?: string[], teamIds?: number[]): Promise<Match[]> {
       const today = new Date();
       const startDate = today.toISOString().split('T')[0];
       
@@ -304,17 +304,30 @@ export class FootballService {
 
       try {
           const allMatches = await matchRepository.getMatchesByDateRange(startDate, endDate);
-          
-          const relevantMatches = !teamNames || teamNames.length === 0
-              ? allMatches
-              : allMatches.filter(match => {
+          const teamIdSet = new Set((teamIds || []).filter(id => Number.isFinite(id)));
+          const teamNameSet = new Set((teamNames || []).map(name => name.toLowerCase()));
+
+          const relevantMatches = allMatches.filter(match => {
+              if (teamIdSet.size === 0 && teamNameSet.size === 0) {
+                  return true;
+              }
+
+              if (teamIdSet.size > 0) {
+                  const homeId = Number(match.homeTeam.id);
+                  const awayId = Number(match.awayTeam.id);
+                  if (teamIdSet.has(homeId) || teamIdSet.has(awayId)) {
+                      return true;
+                  }
+              }
+
+              if (teamNameSet.size > 0) {
                   const home = (match.homeTeam.name || '').toLowerCase();
                   const away = (match.awayTeam.name || '').toLowerCase();
-                  return teamNames.some(userTeam => {
-                      const t = userTeam.toLowerCase();
-                      return home.includes(t) || away.includes(t);
-                  });
-              });
+                  return teamNameSet.has(home) || teamNameSet.has(away);
+              }
+
+              return false;
+          });
 
           // Sort by date and limit to 4
           return relevantMatches

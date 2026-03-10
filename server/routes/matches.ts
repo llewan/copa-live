@@ -19,7 +19,14 @@ router.get('/upcoming', async (req: Request, res: Response) => {
   try {
     const teams = req.query.teams as string;
     const teamList = teams ? teams.split(',').map(t => t.trim()).filter(Boolean) : undefined;
-    const matches = await footballService.getUpcomingMatches(teamList);
+    const teamIdsParam = req.query.teamIds as string;
+    const teamIds = teamIdsParam
+      ? teamIdsParam
+        .split(',')
+        .map(id => Number(id.trim()))
+        .filter(id => Number.isFinite(id))
+      : undefined;
+    const matches = await footballService.getUpcomingMatches(teamList, teamIds);
     
     res.json({
       success: true,

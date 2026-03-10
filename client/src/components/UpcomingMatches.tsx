@@ -5,7 +5,6 @@ import { Match } from '@/types';
 import { getUpcomingMatches } from '@/services/api';
 import { usePreferenceStore } from '@/store/preferenceStore';
 import { useAuthStore } from '@/store/authStore';
-import { TEAMS } from '@/lib/teams';
 import { TeamLogo } from './TeamLogo';
 import { formatToLocal } from '@/lib/dateUtils';
 import { Calendar, MapPin } from 'lucide-react';
@@ -33,15 +32,14 @@ export const UpcomingMatches = () => {
           setMatches([]);
           return;
         }
-        const teamNames = preferences.followedTeams.flatMap(id => {
-          const team = TEAMS.find(t => t.id.toString() === id.toString());
-          return team ? [team.name, team.shortName, ...(team.aliases || [])] : [];
-        }).filter(Boolean) as string[];
-        if (teamNames.length === 0) {
+        const teamIds = preferences.followedTeams
+          .map(id => Number(id))
+          .filter(id => Number.isFinite(id));
+        if (teamIds.length === 0) {
           setMatches([]);
           return;
         }
-        const data = await getUpcomingMatches(teamNames);
+        const data = await getUpcomingMatches({ teamIds });
         setMatches(data);
       } catch (error) {
         console.error('Failed to fetch upcoming matches', error);

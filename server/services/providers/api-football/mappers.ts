@@ -58,22 +58,12 @@ const normalizeEventType = (type: string, detail: string): string => {
 };
 
 export const mapFixtureToMatch = (fixture: ApiFootballFixture): Match => {
-  const events = fixture.events?.map(e => {
-    // Safety check for player object
-    const playerName = e.player?.name || null;
-    
-    // Log warning for missing player name on goals
-    if (e.type === 'Goal' && !playerName) {
-        console.warn(`[Mapper] Missing player name for GOAL in fixture ${fixture.fixture.id}. Minute: ${e.time.elapsed}`);
-    }
-
-    return {
-      type: normalizeEventType(e.type, e.detail),
-      minute: e.time.elapsed + (e.time.extra || 0),
-      team: { name: e.team.name },
-      player: { name: playerName }
-    };
-  }) || [];
+  const events = fixture.events?.map(e => ({
+    type: normalizeEventType(e.type, e.detail),
+    minute: e.time.elapsed + (e.time.extra || 0),
+    team: { name: e.team.name },
+    player: { name: e.player.name }
+  })) || [];
 
   const homeStats = fixture.statistics?.find(s => s.team.id === fixture.teams.home.id)?.statistics || [];
   const awayStats = fixture.statistics?.find(s => s.team.id === fixture.teams.away.id)?.statistics || [];

@@ -56,44 +56,29 @@ export const MatchCard = ({ match }: MatchCardProps) => {
 
   // Helper to extract goals for a team
   const getGoals = (teamName: string) => {
-    if (!match.events) {
-        return [];
-    }
-    
-    // Normalize: lowercase, remove special chars, trim
-    const normalize = (s: string) => s?.toLowerCase().replace(/[^a-z0-9]/g, '').trim() || '';
-    const target = normalize(teamName);
-    
-    const goals = match.events
-      .filter((e: MatchEvent) => {
-        if (e.type !== 'GOAL') return false;
-        
-        const eventTeam = normalize(e.team.name);
-        
-        // Exact match or partial match (if one contains the other)
-        return eventTeam === target || eventTeam.includes(target) || target.includes(eventTeam);
-      })
+    if (!match.events) return [];
+    return match.events
+      .filter((e: MatchEvent) => e.type === 'GOAL' && e.team.name === teamName)
       .map((e: MatchEvent) => ({ 
         name: e.player?.name?.split(' ').pop() || e.player?.name || '', 
         minute: e.minute 
       }));
-
-    return goals;
   };
 
   const homeGoals = (isLive || match.status === 'FINISHED') ? getGoals(match.homeTeam.name) : [];
   const awayGoals = (isLive || match.status === 'FINISHED') ? getGoals(match.awayTeam.name) : [];
 
   return (
-    <div 
-      className="bg-white hover:bg-gray-50/80 transition-all duration-200 py-4 px-5 cursor-pointer group relative overflow-hidden"
+    <button
+      type="button"
+      className="w-full text-left bg-white hover:bg-gray-50/80 transition-all duration-200 py-4 px-5 group relative overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
       onClick={handleClick}
     >
       {/* Status Stripe */}
       <div className={`absolute top-0 left-0 w-0.5 h-full transition-all duration-300 ${
           isLive ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]' : 
           match.status === 'FINISHED' ? 'bg-gray-300' : 
-          'bg-blue-500'
+          'bg-primary-500'
       }`}></div>
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pl-3">
@@ -118,7 +103,7 @@ export const MatchCard = ({ match }: MatchCardProps) => {
                 <div className="flex flex-col items-center">
                     <span className="text-gray-900 font-bold text-base tracking-tight">{formattedTime}</span>
                     {remainingTime && (
-                        <span className="text-[10px] text-blue-600 font-medium mt-0.5 bg-blue-50 px-1.5 py-0.5 rounded-full">
+                        <span className="text-[10px] text-primary-600 font-medium mt-0.5 bg-primary-50 px-1.5 py-0.5 rounded-full">
                             {remainingTime.type === 'STARTING_SOON' 
                               ? t('time.starting_soon')
                               : remainingTime.hours && remainingTime.hours > 0
@@ -205,11 +190,11 @@ export const MatchCard = ({ match }: MatchCardProps) => {
           )}
           
           <div className="md:hidden flex-1 text-right">
-             <span className="text-[10px] text-blue-500 font-medium">Ver detalles &rarr;</span>
+             <span className="text-[10px] text-primary-500 font-medium">{t('match.details.view_details')} &rarr;</span>
           </div>
         </div>
       </div>
-    </div>
+    </button>
   );
 };
 

@@ -106,7 +106,7 @@ export const matchRepository = {
                     match.id,
                     event.type,
                     event.minute,
-                    event.player.name || null, // Ensure null if undefined/empty
+                    event.player.name,
                     event.team.name
                 ]);
             }
@@ -166,13 +166,7 @@ export const matchRepository = {
                 await pool.query(`
                     INSERT INTO events (match_id, type, minute, player, team)
                     VALUES ($1, $2, $3, $4, $5)
-                `, [
-                    id,
-                    event.type,
-                    event.minute,
-                    event.player.name || null, // Ensure null if undefined/empty
-                    event.team.name
-                ]);
+                `, [id, event.type, event.minute, event.player.name, event.team.name]);
             }
         }
     } catch (e) {

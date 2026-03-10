@@ -12,6 +12,15 @@ export default {
       fontFamily: {
         sans: ['Inter', 'sans-serif'],
       },
+      borderRadius: {
+        surface: '0.75rem',
+        control: '0.5rem',
+        chip: '9999px',
+      },
+      boxShadow: {
+        card: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+        'card-lg': '0 10px 15px -3px rgb(0 0 0 / 0.10), 0 4px 6px -4px rgb(0 0 0 / 0.10)',
+      },
       colors: {
         primary: {
           50: '#f0fdf4',

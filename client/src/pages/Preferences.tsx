@@ -6,6 +6,8 @@ import { usePreferenceStore } from '../store/preferenceStore';
 import { Check, Bell, Globe, ArrowRight, Shield } from 'lucide-react';
 import clsx from 'clsx';
 import { TEAMS } from '@/lib/teams';
+import SurfaceCard from '@/components/SurfaceCard';
+import StateMessage from '@/components/StateMessage';
 
 const Preferences = () => {
   const { t, i18n } = useTranslation();
@@ -63,7 +65,6 @@ const Preferences = () => {
 
   const premierLeagueTeams = TEAMS.filter(t => t.league === 'Premier League');
   const championsLeagueTeams = TEAMS.filter(t => t.league === 'Champions League');
-  const ligaProfesionalTeams = TEAMS.filter(t => t.league === 'Primera Division');
 
   const renderTeamGrid = (teams: typeof TEAMS) => (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
@@ -114,7 +115,7 @@ const Preferences = () => {
         </div>
 
         {/* Main Content */}
-        <div className="bg-white shadow-xl rounded-2xl overflow-hidden">
+        <SurfaceCard variant="elevated" className="overflow-hidden">
           
           {/* Premier League Section */}
           <div className="p-8 border-b border-gray-200">
@@ -136,17 +137,6 @@ const Preferences = () => {
               {t('preferences.champions_league')}
             </h2>
             {renderTeamGrid(championsLeagueTeams)}
-          </div>
-
-          {/* Liga Profesional Section */}
-          <div className="p-8 border-b border-gray-200">
-            <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
-              <span className="bg-sky-100 text-sky-700 p-2 rounded-lg mr-3">
-                LPF
-              </span>
-              {t('preferences.liga_profesional')}
-            </h2>
-            {renderTeamGrid(ligaProfesionalTeams)}
           </div>
 
           {/* Other Settings */}
@@ -207,8 +197,8 @@ const Preferences = () => {
 
           {/* Error Message */}
           {error && (
-            <div className="px-8 py-4 bg-red-50 text-red-700 text-sm border-t border-red-100">
-              {error}
+            <div className="px-8 py-4 border-t border-red-100">
+              <StateMessage tone="error" message={error} />
             </div>
           )}
 
@@ -220,14 +210,14 @@ const Preferences = () => {
              <button
               onClick={handleSave}
               disabled={isLoading}
-              className="inline-flex items-center px-8 py-3 border border-transparent text-base font-medium rounded-lg shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 transition-all transform hover:translate-y-[-1px]"
+              className="ui-btn-base ui-btn-lg ui-btn-primary shadow-card transition-all transform hover:translate-y-[-1px]"
             >
               {isLoading ? t('preferences.saving') : t('preferences.save_continue')}
               {!isLoading && <ArrowRight className="ml-2 -mr-1 h-5 w-5" />}
             </button>
           </div>
 
-        </div>
+        </SurfaceCard>
       </div>
     </div>
   );

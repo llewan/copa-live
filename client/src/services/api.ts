@@ -56,9 +56,11 @@ export const getMatches = async (date?: string): Promise<Match[]> => {
   return json.data;
 };
 
-export const getUpcomingMatches = async (teams: string[]): Promise<Match[]> => {
-  const query = teams.map(t => encodeURIComponent(t)).join(',');
-  const response = await fetch(`${API_BASE_URL}/matches/upcoming?teams=${query}`);
+export const getUpcomingMatches = async (teams?: string[]): Promise<Match[]> => {
+  const query = teams && teams.length > 0
+    ? `?teams=${teams.map(t => encodeURIComponent(t)).join(',')}`
+    : '';
+  const response = await fetch(`${API_BASE_URL}/matches/upcoming${query}`);
   if (!response.ok) {
     throw new Error('Failed to fetch upcoming matches');
   }

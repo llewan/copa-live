@@ -6,7 +6,10 @@ import MatchCardSkeleton from '@/components/MatchCardSkeleton';
 import Calendar from '@/components/Calendar';
 import SEO from '@/components/SEO';
 import WorldCupCountdown from '@/components/WorldCupCountdown';
-import { Calendar as CalendarIcon, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, ShieldCheck } from 'lucide-react';
+import { UpcomingMatches } from '@/components/UpcomingMatches';
+import SurfaceCard from '@/components/SurfaceCard';
+import StateMessage from '@/components/StateMessage';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, RefreshCw, ShieldCheck } from 'lucide-react';
 import { generateCalendarDays, getHeaderDate } from '@/lib/dateUtils';
 import { format, addDays, differenceInMinutes, differenceInSeconds } from 'date-fns';
 import { usePreferenceStore } from '@/store/preferenceStore';
@@ -14,12 +17,20 @@ import { useAuthStore } from '@/store/authStore';
 import { TEAMS } from '@/lib/teams';
 import { Match } from '@/types';
 
+// Global cache outside component to persist across navigation
+const matchesCache = new Map<string, Match[]>();
+
 export const Dashboard = () => {
   const { t, i18n } = useTranslation();
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  
+  // Ref to track the current selected date for race condition prevention
+  const selectedDateRef = React.useRef(format(new Date(), 'yyyy-MM-dd'));
+
   const [showCalendar, setShowCalendar] = useState(false);
   const [filterMode, setFilterMode] = useState<'all' | 'my_teams'>('all');
   
@@ -71,22 +82,82 @@ export const Dashboard = () => {
   // Generate calendar days based on selected date
   const days = useMemo(() => generateCalendarDays(selectedDate, i18n.language), [selectedDate, i18n.language]);
 
+  // Update ref when selectedDate changes
+  useEffect(() => {
+    selectedDateRef.current = selectedDate;
+  }, [selectedDate]);
+
   const fetchData = useCallback(async (isBackground = false) => {
+    // Capture the date at the start of the call
+    const dateToFetch = selectedDate;
+    
     try {
       setError(null);
-      // Only show full loading state on initial load or date change, not background refresh
-      if (!isBackground && matches.length === 0) setLoading(true); 
       
-      const data = await getMatches(selectedDate);
+      // If purely background refresh, don't show loading state
+      if (isBackground) {
+         // Only proceed if we are still on the same date
+         if (dateToFetch !== selectedDateRef.current) return;
+         
+         setIsRefreshing(true);
+         const data = await getMatches(dateToFetch);
+         
+         // Re-check after await
+         if (dateToFetch !== selectedDateRef.current) return;
+         
+         matchesCache.set(dateToFetch, data);
+         setMatches(data);
+         setLastUpdated(new Date());
+         setIsRefreshing(false);
+         return;
+      }
+
+      // Main fetch logic (user initiated or initial load)
+      if (matchesCache.has(dateToFetch)) {
+        // Cache HIT: Show immediately
+        setMatches(matchesCache.get(dateToFetch)!);
+        setLoading(false);
+      } else {
+        // Cache MISS: Show loading state, clear previous matches to prevent "wrong date" flicker
+        setMatches([]); 
+        setLoading(true);
+      }
+      
+      const data = await getMatches(dateToFetch);
+      
+      // CRITICAL: Race condition check
+      // If the user changed the date while we were fetching, discard this result
+      if (dateToFetch !== selectedDateRef.current) {
+          return;
+      }
+      
+      matchesCache.set(dateToFetch, data);
       setMatches(data);
       setLastUpdated(new Date());
-    } catch {
-      setError('Failed to load matches');
-    } finally {
       setLoading(false);
+
+      // Smart Prefetching: Next and Previous day
+      const prefetchDays = [
+        format(addDays(new Date(dateToFetch), 1), 'yyyy-MM-dd'),
+        format(addDays(new Date(dateToFetch), -1), 'yyyy-MM-dd')
+      ];
+
+      prefetchDays.forEach(day => {
+        if (!matchesCache.has(day)) {
+            getMatches(day).then(d => matchesCache.set(day, d)).catch(() => {});
+        }
+      });
+
+    } catch (err) {
+      // Only show error if we are still on the relevant date
+      if (dateToFetch === selectedDateRef.current) {
+          console.error(err);
+          setError('Failed to load matches');
+          setLoading(false);
+          setIsRefreshing(false);
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDate]); // matches length is checked via closure but that's fine for initial load check
+  }, [selectedDate]);
 
   // Smart Polling Logic
   useEffect(() => {
@@ -172,9 +243,74 @@ export const Dashboard = () => {
           {/* Header Section */}
           <div className="flex flex-col mb-6">
             <WorldCupCountdown />
-            <div className="flex justify-between items-center mb-6">
-              <h1 className="text-3xl font-bold text-black">{t('dashboard.title')}</h1>
-              <div className="flex items-center gap-3">
+            <UpcomingMatches />
+            {/* Date Selector */}
+            <div className="flex items-center justify-between bg-white/80 backdrop-blur-sm p-1.5 rounded-xl border border-gray-200/60 mb-2 shadow-sm sticky top-14 z-30">
+              <button 
+                 onClick={() => {
+                     const prev = addDays(new Date(selectedDate), -1);
+                     setSelectedDate(format(prev, 'yyyy-MM-dd'));
+                 }}
+                 className="ui-btn-base p-2 rounded-chip ui-btn-ghost transition-all active:scale-95"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              
+              <div 
+                className="flex gap-1.5 overflow-x-auto no-scrollbar flex-1 justify-center px-2 py-1"
+                key={selectedDate} // Force re-render for animation
+              >
+                {days.map((d, i) => {
+                  const isSelected = d.fullDate === selectedDate;
+                  const isToday = d.isToday;
+                  
+                  return (
+                    <button
+                      type="button"
+                      key={i} 
+                      onClick={() => handleDateSelect(d.fullDate)}
+                      className={`flex flex-col items-center justify-center px-3 py-2 rounded-lg min-w-[72px] transition-all duration-200 border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
+                        isSelected 
+                          ? 'bg-primary-600 border-primary-600 shadow-md transform scale-105' 
+                          : isToday
+                            ? 'bg-primary-50 border-primary-100 hover:bg-primary-100'
+                            : 'bg-transparent border-transparent hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className={`text-[10px] font-bold tracking-wider mb-0.5 uppercase ${
+                        isSelected 
+                          ? 'text-white/90' 
+                          : isToday
+                            ? 'text-primary-600'
+                            : 'text-gray-400'
+                      }`}>
+                        {d.day}
+                      </span>
+                      <span className={`text-xs font-medium ${
+                        isSelected 
+                          ? 'text-white' 
+                          : isToday
+                            ? 'text-primary-700 font-bold'
+                            : 'text-gray-700'
+                      }`}>
+                        {d.date}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button 
+                 onClick={() => {
+                     const next = addDays(new Date(selectedDate), 1);
+                     setSelectedDate(format(next, 'yyyy-MM-dd'));
+                 }}
+                 className="ui-btn-base p-2 rounded-chip ui-btn-ghost transition-all active:scale-95"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+              
+              <div className="border-l border-gray-200 pl-1 ml-1 flex items-center gap-2">
                 {user && preferences.followedTeams.length > 0 ? (
                   <div className="bg-gray-100 p-1 rounded-lg flex items-center">
                     <button 
@@ -198,101 +334,31 @@ export const Dashboard = () => {
                     </button>
                   </div>
                 ) : null}
-                
-                <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors sm:flex">
-                  {t('dashboard.select_league')} <ChevronDown className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
 
-            {/* Date Selector */}
-            <div className="flex items-center justify-between bg-white/80 backdrop-blur-sm p-1.5 rounded-xl border border-gray-200/60 mb-2 shadow-sm sticky top-[70px] z-30">
-              <button 
-                 onClick={() => {
-                     const prev = addDays(new Date(selectedDate), -1);
-                     setSelectedDate(format(prev, 'yyyy-MM-dd'));
-                 }}
-                 className="p-2 hover:bg-gray-100/80 rounded-full text-gray-500 hover:text-black transition-all active:scale-95"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-              
-              <div 
-                className="flex gap-1.5 overflow-x-auto no-scrollbar flex-1 justify-center px-2 py-1"
-                key={selectedDate} // Force re-render for animation
-              >
-                {days.map((d, i) => {
-                  const isSelected = d.fullDate === selectedDate;
-                  const isToday = d.isToday;
+                <div className="relative" ref={calendarRef}>
+                  <button 
+                    onClick={() => setShowCalendar(!showCalendar)}
+                    className={`ui-btn-base p-2 rounded-control transition-colors ${
+                      showCalendar 
+                        ? 'bg-gray-100 text-black' 
+                        : 'text-gray-500 hover:bg-gray-50 hover:text-black'
+                    }`}
+                  >
+                    <CalendarIcon className="w-5 h-5" />
+                  </button>
                   
-                  return (
-                    <div 
-                      key={i} 
-                      onClick={() => handleDateSelect(d.fullDate)}
-                      className={`flex flex-col items-center justify-center px-3 py-2 rounded-lg cursor-pointer min-w-[72px] transition-all duration-200 border ${
-                        isSelected 
-                          ? 'bg-black border-black shadow-md transform scale-105' 
-                          : isToday
-                            ? 'bg-blue-50 border-blue-100 hover:bg-blue-100'
-                            : 'bg-transparent border-transparent hover:bg-gray-50'
-                      }`}
-                    >
-                      <span className={`text-[10px] font-bold tracking-wider mb-0.5 uppercase ${
-                        isSelected 
-                          ? 'text-white/90' 
-                          : isToday 
-                            ? 'text-blue-600' 
-                            : 'text-gray-400'
-                      }`}>
-                        {d.day}
-                      </span>
-                      <span className={`text-xs font-medium ${
-                        isSelected 
-                          ? 'text-white' 
-                          : isToday 
-                            ? 'text-blue-700 font-bold' 
-                            : 'text-gray-700'
-                      }`}>
-                        {d.date}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <button 
-                 onClick={() => {
-                     const next = addDays(new Date(selectedDate), 1);
-                     setSelectedDate(format(next, 'yyyy-MM-dd'));
-                 }}
-                 className="p-2 hover:bg-gray-100/80 rounded-full text-gray-500 hover:text-black transition-all active:scale-95"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
-              
-              <div className="border-l border-gray-200 pl-1 ml-1 relative" ref={calendarRef}>
-                 <button 
-                   onClick={() => setShowCalendar(!showCalendar)}
-                   className={`p-2 rounded-lg transition-colors ${
-                     showCalendar 
-                       ? 'bg-gray-100 text-black' 
-                       : 'text-gray-500 hover:bg-gray-50 hover:text-black'
-                   }`}
-                 >
-                   <CalendarIcon className="w-5 h-5" />
-                 </button>
-                 
-                 {showCalendar && (
-                    <div className="absolute top-full right-0 mt-2 z-50 animate-in fade-in zoom-in-95 duration-200">
-                        <div className="bg-white rounded-xl shadow-xl border border-gray-100 p-1">
-                          <Calendar 
-                              selectedDate={selectedDate}
-                              onSelect={handleDateSelect}
-                              onClose={() => setShowCalendar(false)}
-                          />
-                        </div>
-                    </div>
-                 )}
+                  {showCalendar && (
+                     <div className="absolute top-full right-0 mt-2 z-50 animate-in fade-in zoom-in-95 duration-200">
+                         <div className="bg-white rounded-xl shadow-xl border border-gray-100 p-1">
+                           <Calendar 
+                               selectedDate={selectedDate}
+                               onSelect={handleDateSelect}
+                               onClose={() => setShowCalendar(false)}
+                           />
+                         </div>
+                     </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -303,8 +369,11 @@ export const Dashboard = () => {
                   </div>
                   {lastUpdated && (
                     <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                      <RefreshCw className="w-3 h-3" />
-                      {(() => {
+                      <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin text-primary-500' : ''}`} />
+                      {isRefreshing ? (
+                        <span className="text-primary-500 font-medium">{t('dashboard.refreshing')}</span>
+                      ) : (
+                        (() => {
                         const diffInSeconds = differenceInSeconds(currentTime, lastUpdated);
                         const diffInMinutes = differenceInMinutes(currentTime, lastUpdated);
                         
@@ -315,15 +384,16 @@ export const Dashboard = () => {
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                               </span>
-                              Actualizado en tiempo real
+                              {t('dashboard.updated_realtime')}
                             </span>
                           );
                         } else {
                           return (
-                            <span>Actualizado hace {diffInMinutes} min</span>
+                            <span>{t('dashboard.updated_ago', { minutes: diffInMinutes })}</span>
                           );
                         }
-                      })()}
+                      })()
+                      )}
                     </div>
                   )}
                 </div>
@@ -337,28 +407,25 @@ export const Dashboard = () => {
           {loading ? (
             <div className="space-y-6">
                {[1, 2].map((i) => (
-                 <div key={i} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-                   <div className="bg-gray-50/50 px-4 py-3 border-b border-gray-200">
+                 <SurfaceCard key={i} className="overflow-hidden">
+                   <div className="bg-gradient-to-r from-gray-50 to-white px-5 py-3 border-b border-gray-100 flex items-center gap-3">
+                     <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse"></div>
                      <div className="h-6 w-32 bg-gray-200 rounded animate-pulse"></div>
                    </div>
-                   <div className="divide-y divide-gray-100">
+                   <div className="divide-y divide-gray-100/80">
                      {[1, 2, 3].map((j) => (
                        <MatchCardSkeleton key={j} />
                      ))}
                    </div>
-                 </div>
+                 </SurfaceCard>
                ))}
             </div>
           ) : error ? (
-            <div className="bg-red-50 text-red-600 p-4 rounded-lg text-center border border-red-100">
-              {error}
-            </div>
+            <StateMessage tone="error" message={error} className="text-center" />
           ) : (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out" key={selectedDate}>
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 ease-out">
               {Object.keys(groupedMatches).length === 0 ? (
-                 <div className="text-center py-16 bg-white rounded-lg border border-gray-200">
-                   <p className="text-gray-500 text-lg">No hay partidos programados para esta fecha.</p>
-                 </div>
+                <StateMessage message={t('dashboard.no_matches')} className="text-center py-16 text-base" />
               ) : (
                 Object.entries(groupedMatches).map(([league, leagueMatches]) => {
                     const firstMatch = leagueMatches[0];
@@ -366,7 +433,7 @@ export const Dashboard = () => {
                     // const country = firstMatch?.competition?.name; // Often API provides Country but we might not have it in match root
 
                     return (
-                        <div key={league} className="bg-white rounded-xl border border-gray-200/80 shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden">
+                        <SurfaceCard key={league} className="hover:shadow-md transition-shadow duration-300 overflow-hidden">
                             <div className="bg-gradient-to-r from-gray-50 to-white px-5 py-3 border-b border-gray-100 flex items-center gap-3">
                                 {leagueEmblem ? (
                                     <img 
@@ -392,7 +459,7 @@ export const Dashboard = () => {
                                 <MatchCard key={match.id} match={match} />
                                 ))}
                             </div>
-                        </div>
+                        </SurfaceCard>
                     );
                 })
               )}

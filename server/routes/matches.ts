@@ -18,12 +18,7 @@ router.post('/sync', async (req: Request, res: Response) => {
 router.get('/upcoming', async (req: Request, res: Response) => {
   try {
     const teams = req.query.teams as string;
-    if (!teams) {
-      res.json({ success: true, data: [], timestamp: new Date().toISOString() });
-      return;
-    }
-    
-    const teamList = teams.split(',').map(t => t.trim());
+    const teamList = teams ? teams.split(',').map(t => t.trim()).filter(Boolean) : undefined;
     const matches = await footballService.getUpcomingMatches(teamList);
     
     res.json({

@@ -4,9 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { getMatchDetails } from '@/services/api';
 import SEO from '@/components/SEO';
 import { TeamLogo } from '@/components/TeamLogo';
+import SurfaceCard from '@/components/SurfaceCard';
+import StateMessage from '@/components/StateMessage';
 
 
-import { ArrowLeft, Loader2, Clock, Calendar, MapPin } from 'lucide-react';
+import { ArrowLeft, Loader2, Clock, Calendar, MapPin, CircleDot, Square, Repeat } from 'lucide-react';
 
 import { MatchDetail as MatchDetailType } from '@/types';
 
@@ -66,21 +68,26 @@ export const MatchDetail = () => {
   if (error || !match) {
     return (
       <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <button 
+        <button
           onClick={() => navigate('/')}
-          className="flex items-center text-gray-600 hover:text-gray-900 mb-6 transition-colors font-medium"
+          className="ui-btn-base ui-btn-md ui-btn-ghost mb-6"
         >
           <ArrowLeft className="w-4 h-4 mr-2" /> {t('match.details.back_to_matches')}
         </button>
-        <div className="text-center text-red-600 py-12 bg-red-50 rounded-xl border border-red-100">
-          <p className="font-semibold text-lg">{error || t('match.details.not_found')}</p>
-          <button 
-            onClick={() => navigate('/')}
-            className="mt-4 px-6 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition-colors font-medium"
-          >
-            {t('match.details.go_home')}
-          </button>
-        </div>
+        <StateMessage
+          tone="error"
+          title={error || t('match.details.not_found')}
+          message={t('match.details.failed_to_load')}
+          className="text-center py-12"
+          actions={(
+            <button
+              onClick={() => navigate('/')}
+              className="ui-btn-base ui-btn-md bg-white border border-red-200 text-red-600 hover:bg-red-50"
+            >
+              {t('match.details.go_home')}
+            </button>
+          )}
+        />
       </div>
     );
   }
@@ -98,6 +105,21 @@ export const MatchDetail = () => {
     }
   };
 
+  const getEventIcon = (type: string) => {
+    switch (type) {
+      case 'GOAL':
+        return <CircleDot className="w-4 h-4" />;
+      case 'YELLOW_CARD':
+        return <Square className="w-4 h-4 text-yellow-500 fill-yellow-500" />;
+      case 'RED_CARD':
+        return <Square className="w-4 h-4 text-red-500 fill-red-500" />;
+      case 'SUBSTITUTION':
+        return <Repeat className="w-4 h-4" />;
+      default:
+        return null;
+    }
+  };
+
   return (
     <>
       <SEO 
@@ -112,11 +134,11 @@ export const MatchDetail = () => {
           <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white via-transparent to-transparent"></div>
           
           <div className="container mx-auto max-w-5xl relative z-10">
-            <button 
+            <button
               onClick={() => navigate('/')}
-              className="flex items-center text-primary-100 hover:text-white mb-8 transition-colors text-sm font-medium group"
+              className="ui-btn-base ui-btn-md text-primary-100 hover:text-white mb-8 group"
             >
-              <div className="bg-white/10 p-1.5 rounded-lg mr-2 group-hover:bg-white/20 transition-colors">
+              <div className="bg-white/10 p-1.5 rounded-control mr-2 group-hover:bg-white/20 transition-colors">
                 <ArrowLeft className="w-4 h-4" /> 
               </div>
               {t('match.details.back_to_matches')}
@@ -179,7 +201,7 @@ export const MatchDetail = () => {
         <div className="container mx-auto max-w-5xl px-4 -mt-8 relative z-20">
           <div className="grid gap-6 md:grid-cols-2">
             {/* Stats */}
-            <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+            <SurfaceCard variant="elevated" className="overflow-hidden">
               <div className="p-4 border-b border-gray-100 bg-gray-50/50">
                 <h3 className="text-lg font-bold text-gray-900">{t('match.details.stats')}</h3>
               </div>
@@ -210,18 +232,13 @@ export const MatchDetail = () => {
                     </div>
                   )})
                 ) : (
-                  <div className="text-center text-gray-500 py-8 flex flex-col items-center">
-                    <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-3">
-                      <span className="text-2xl">📊</span>
-                    </div>
-                    <p>{t('match.details.no_stats')}</p>
-                  </div>
+                  <StateMessage message={t('match.details.no_stats')} className="py-8" />
                 )}
               </div>
-            </div>
+            </SurfaceCard>
 
             {/* Events */}
-            <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+            <SurfaceCard variant="elevated" className="overflow-hidden">
               <div className="p-4 border-b border-gray-100 bg-gray-50/50">
                 <h3 className="text-lg font-bold text-gray-900">{t('match.details.timeline')}</h3>
               </div>
@@ -244,26 +261,22 @@ export const MatchDetail = () => {
                             {event.player.name} <span className="text-gray-500 font-normal text-sm">({event.team.name})</span>
                           </div>
                           <div className="text-sm text-primary-600 font-medium uppercase tracking-wide mt-0.5 flex items-center gap-2">
-                            {event.type === 'GOAL' && `⚽ ${t('match.events.goal')}`}
-                            {event.type === 'YELLOW_CARD' && `🟨 ${t('match.events.yellow_card')}`}
-                            {event.type === 'RED_CARD' && `🟥 ${t('match.events.red_card')}`}
-                            {event.type === 'SUBSTITUTION' && `🔄 ${t('match.events.substitution')}`}
+                            {getEventIcon(event.type)}
+                            {event.type === 'GOAL' && t('match.events.goal')}
+                            {event.type === 'YELLOW_CARD' && t('match.events.yellow_card')}
+                            {event.type === 'RED_CARD' && t('match.events.red_card')}
+                            {event.type === 'SUBSTITUTION' && t('match.events.substitution')}
                             {!['GOAL', 'YELLOW_CARD', 'RED_CARD', 'SUBSTITUTION'].includes(event.type) && event.type}
                           </div>
                         </div>
                       </div>
                     ))
                   ) : (
-                    <div className="text-center text-gray-500 py-8 flex flex-col items-center">
-                      <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-3">
-                        <span className="text-2xl">⏱️</span>
-                      </div>
-                      <p>{t('match.details.no_events')}</p>
-                    </div>
+                    <StateMessage message={t('match.details.no_events')} className="py-8" />
                   )}
                 </div>
               </div>
-            </div>
+            </SurfaceCard>
           </div>
         </div>
       </div>

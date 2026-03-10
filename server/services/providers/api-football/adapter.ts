@@ -2,8 +2,6 @@ import { IFootballProvider, Match, MatchDetail } from '../../interfaces.js';
 import { apiFootballClient } from './client.js';
 import { mapFixtureToMatch, mapFixtureToMatchDetail } from './mappers.js';
 
-import { ApiFootballFixture } from './types.js';
-
 export class ApiFootballComAdapter implements IFootballProvider {
   name = 'api-football';
   private allowedLeagueIds: number[] = [];
@@ -61,7 +59,6 @@ export class ApiFootballComAdapter implements IFootballProvider {
         // API-Football requires 'season' or 'league' when using from/to.
         // We cannot just ask for "all matches in the world between X and Y".
         // This is a constraint of the API.
-        // Note: The 'next' parameter is not available on the Free plan (returns 403/Error).
         // Workaround: Loop through allowed leagues and fetch schedule for each?
         // OR: Loop through DATES and fetch 'fixtures?date=...' for each day.
         // Fetching by date is allowed globally.
@@ -71,7 +68,7 @@ export class ApiFootballComAdapter implements IFootballProvider {
         
         const start = new Date(from);
         const end = new Date(to);
-        let allMatches: ApiFootballFixture[] = [];
+        let allMatches: any[] = [];
         
         for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
             const dateStr = d.toISOString().split('T')[0];

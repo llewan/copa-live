@@ -50,22 +50,10 @@ export class ApiFootballClient {
     const data = await response.json() as ApiFootballResponse;
     
     // Check for functional errors in body
-    if (data.errors) {
-        const hasErrors = Array.isArray(data.errors) 
-            ? data.errors.length > 0 
-            : Object.keys(data.errors).length > 0;
-            
-        if (hasErrors) {
-            console.error('[ApiFootballClient] API Errors:', data.errors);
-            // If it's a rate limit error disguised as 200 OK
-             if (!Array.isArray(data.errors) && typeof data.errors === 'object' && data.errors !== null) {
-                  const errorObj = data.errors as Record<string, unknown>;
-                  if (typeof errorObj.requests === 'string') {
-                       this.remainingRequests = 0;
-                       throw new Error(`ApiFootball Rate Limit: ${errorObj.requests}`);
-                  }
-             }
-        }
+    if (Array.isArray(data.errors) && data.errors.length > 0) {
+        // Sometimes errors is an array, sometimes object. v3 is usually object or array.
+        // If it's empty array [] it's fine.
+        console.error('[ApiFootballClient] API Errors:', data.errors);
     }
     
     return data;

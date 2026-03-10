@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../store/authStore';
 import { logEvent } from '@/lib/analytics';
 import { Trophy, ArrowRight } from 'lucide-react';
+import SurfaceCard from '@/components/SurfaceCard';
+import StateMessage from '@/components/StateMessage';
 
 const Register = () => {
   const { t } = useTranslation();
@@ -24,7 +26,7 @@ const Register = () => {
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-xl shadow-lg">
+      <SurfaceCard variant="elevated" className="max-w-md w-full space-y-8 p-8">
         <div className="text-center">
           <div className="mx-auto h-12 w-12 bg-primary-100 rounded-full flex items-center justify-center mb-4">
              <Trophy className="h-6 w-6 text-primary-600" />
@@ -40,9 +42,7 @@ const Register = () => {
         
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
-            <div className="bg-red-50 border-l-4 border-red-500 p-4">
-              <p className="text-sm text-red-700">{error}</p>
-            </div>
+            <StateMessage tone="error" message={error} />
           )}
           
           <div className="rounded-md shadow-sm -space-y-px">
@@ -93,7 +93,7 @@ const Register = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+              className="ui-btn-base ui-btn-md ui-btn-primary group relative w-full"
             >
               {isLoading ? t('auth.creating_account') : t('auth.register_button')}
               {!isLoading && (
@@ -104,7 +104,7 @@ const Register = () => {
             </button>
           </div>
         </form>
-      </div>
+      </SurfaceCard>
     </div>
   );
 };

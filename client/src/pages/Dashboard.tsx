@@ -131,7 +131,7 @@ export const Dashboard = () => {
       const followedTeamNames = preferences.followedTeams.flatMap(id => {
         // loose equality to handle string/number mismatch
         const team = TEAMS.find(t => t.id.toString() === id.toString());
-        return team ? [team.name, team.shortName, ...(team.aliases || [])] : [];
+        return team ? [team.name, team.shortName] : [];
       });
 
       filteredMatches = matches.filter(match => {

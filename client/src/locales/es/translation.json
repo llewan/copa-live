@@ -101,7 +101,11 @@
     "select_league": "Selecciona una Liga",
     "updated_realtime": "Actualizado en tiempo real",
     "updated_ago": "Actualizado hace {{minutes}} min",
-    "no_matches": "No hay partidos programados para esta fecha."
+    "no_matches": "No hay partidos programados para esta fecha.",
+    "upcoming": {
+      "title": "Próximos Partidos",
+      "description": "Tus equipos favoritos en acción"
+    }
   },
   "world_cup": {
     "title": "Copa Mundial 2026",

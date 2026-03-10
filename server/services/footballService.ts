@@ -77,7 +77,7 @@ export class FootballService {
 
         // Check if synced recently
         const lastSync = await auditService.getLastSyncTime('syncLiveMatches');
-        const minIntervalMs = 15 * 60 * 1000; // 15 minutes
+        const minIntervalMs = 5 * 60 * 1000; // 5 minutes
         const timeSinceLastSync = lastSync ? (now.getTime() - lastSync.getTime()) : Infinity;
 
         // If DB is empty, we force sync regardless of active matches (to populate the day)
@@ -214,7 +214,7 @@ export class FootballService {
 
               if (matchesNeedingDetails.length > 0) {
                   console.log(`[FootballService] Found ${matchesNeedingDetails.length} matches needing scorer details.`);
-                  // Limit to 3 to protect rate limit (runs every 15 mins)
+                  // Limit to 3 to protect rate limit (runs every 5 mins)
                   const queue = matchesNeedingDetails.slice(0, 3);
                   
                   for (const m of queue) {
@@ -294,9 +294,38 @@ export class FootballService {
       }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async getUpcomingMatches(_teamNames: string[]): Promise<Match[]> {
-      return [];
+  async getUpcomingMatches(teamNames: string[]): Promise<Match[]> {
+      const today = new Date();
+      const startDate = today.toISOString().split('T')[0];
+      
+      const endDateDate = new Date();
+      endDateDate.setDate(today.getDate() + 14);
+      const endDate = endDateDate.toISOString().split('T')[0];
+
+      try {
+          const allMatches = await matchRepository.getMatchesByDateRange(startDate, endDate);
+          
+          // Filter by team names
+          // We look for matches where home or away team name (or part of it) matches one of the user's teams
+          const relevantMatches = allMatches.filter(match => {
+              const home = (match.homeTeam.name || '').toLowerCase();
+              const away = (match.awayTeam.name || '').toLowerCase();
+              
+              return teamNames.some(userTeam => {
+                  const t = userTeam.toLowerCase();
+                  return home.includes(t) || away.includes(t);
+              });
+          });
+
+          // Sort by date and limit to 4
+          return relevantMatches
+              .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime())
+              .slice(0, 4);
+              
+      } catch (error) {
+          console.error('[FootballService] Error getting upcoming matches:', error);
+          return [];
+      }
   }
 }
 

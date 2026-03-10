@@ -101,7 +101,11 @@
     "select_league": "Select a League",
     "updated_realtime": "Updated in real-time",
     "updated_ago": "Updated {{minutes}} min ago",
-    "no_matches": "No matches scheduled for this date."
+    "no_matches": "No matches scheduled for this date.",
+    "upcoming": {
+      "title": "Upcoming Matches",
+      "description": "Your favorite teams in action"
+    }
   },
   "world_cup": {
     "title": "World Cup 2026",

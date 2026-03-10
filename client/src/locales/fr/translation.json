@@ -101,7 +101,11 @@
     "select_league": "Sélectionner une Ligue",
     "updated_realtime": "Mis à jour en temps réel",
     "updated_ago": "Mis à jour il y a {{minutes}} min",
-    "no_matches": "Aucun match prévu pour cette date."
+    "no_matches": "Aucun match prévu pour cette date.",
+    "upcoming": {
+      "title": "Prochains Matchs",
+      "description": "Vos équipes préférées en action"
+    }
   },
   "world_cup": {
     "title": "Coupe du Monde 2026",
